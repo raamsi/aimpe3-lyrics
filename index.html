@@ -3,24 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AimpE3 - Gestionnaire de Paroles</title>
+    <title>AimpE3 - Paroles Drive</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 20px; max-width: 600px; margin: auto; }
-        h1 { color: #1DB954; }
-        .card { background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-        code { background: #333; padding: 2px 6px; border-radius: 4px; }
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 10px; max-width: 400px; margin: auto; }
+        input, button { width: 100%; margin-top: 10px; padding: 10px; box-sizing: border-box; }
+        button { background: #1DB954; color: white; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
+        #status { margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>🎵 AimpE3 Lyrics Repository</h1>
-    <div class="card">
-        <h3>Comment ajouter des paroles ?</h3>
-        <p>Pour ajouter un fichier <code>.lrc</code> pour votre application, uploadez-le directement dans le dossier <code>lyrics/</code> de ce dépôt sur GitHub.</p>
-        <p>Le nom du fichier doit correspondre au nom de la chanson (ex: <code>nom_de_la_piste.lrc</code>).</p>
-    </div>
-    <div class="card">
-        <h3>Accès direct</h3>
-        <p>Les paroles sont accessibles publiquement via l'API brute de GitHub pour être lues directement par votre application Android.</p>
-    </div>
+
+<div class="box">
+    <h2>🎵 Uploader un fichier .lrc</h2>
+    
+    <label>GitHub Personal Access Token :</label>
+    <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx">
+
+    <label>Fichier .lrc :</label>
+    <input type="file" id="fileInput" accept=".lrc">
+
+    <button onclick="uploadLrc()">Envoyer sur GitHub</button>
+
+    <div id="status"></div>
+</div>
+
+<script>
+async function uploadLrc() {
+    const token = document.getElementById('token').value.trim();
+    const fileInput = document.getElementById('fileInput');
+    const status = document.getElementById('status');
+
+    if (!token || fileInput.files.length === 0) {
+        status.innerText = "Veuillez remplir tous les champs.";
+        status.style.color = "red";
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const fileName = file.name;
+    const reader = new FileReader();
+
+    reader.onload = async function(e) {
+        const content = btoa(unescape(encodeURIComponent(e.target.result))); // Encode en Base64
+        const url = `https://api.github.com/repos/raamsi/aimpe3-lyrics/contents/lyrics/${fileName}`;
+
+        status.innerText = "Téléversement en cours...";
+        status.style.color = "orange";
+
+        try {
+            // Vérifier si le fichier existe déjà pour récupérer son SHA
+            let sha = "";
+            const getRes = await fetch(url, { headers: { "Authorization": `token ${token}` } });
+            if (getRes.ok) {
+                const getData = await getRes.json();
+                sha = getData.sha;
+            }
+
+            // Envoi ou mise à jour du fichier
+            const res = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    "Authorization": `token ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: `Ajout des paroles : ${fileName}`,
+                    content: content,
+                    sha: sha ? sha : undefined
+                })
+            });
+
+            if (res.ok) {
+                status.innerText = "✅ Fichier .lrc envoyé avec succès !";
+                status.style.color = "#1DB954";
+            } else {
+                const err = await res.json();
+                status.innerText = "❌ Erreur : " + err.message;
+                status.style.color = "red";
+            }
+        } catch (error) {
+            status.innerText = "❌ Erreur de connexion.";
+            status.style.color = "red";
+        }
+    };
+
+    reader.readAsText(file);
+}
+</script>
+
 </body>
 </html>
