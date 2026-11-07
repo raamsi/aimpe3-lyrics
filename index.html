@@ -27,70 +27,80 @@
 
     <div id="status"></div>
 </div>
-
 <script>
-async function uploadLrc() {
-    const token = document.getElementById('token').value.trim();
-    const fileInput = document.getElementById('fileInput');
-    const status = document.getElementById('status');
-
-    if (!token || fileInput.files.length === 0) {
-        status.innerText = "Veuillez remplir tous les champs.";
-        status.style.color = "red";
-        return;
-    }
-
-    const file = fileInput.files[0];
-    const fileName = file.name;
-    const reader = new FileReader();
-
-    reader.onload = async function(e) {
-        const content = btoa(unescape(encodeURIComponent(e.target.result))); // Encode en Base64
-        const url = `https://api.github.com/repos/raamsi/aimpe3-lyrics/contents/lyrics/${fileName}`;
-
-        status.innerText = "Téléversement en cours...";
-        status.style.color = "orange";
-
-        try {
-            // Vérifier si le fichier existe déjà pour récupérer son SHA
-            let sha = "";
-            const getRes = await fetch(url, { headers: { "Authorization": `token ${token}` } });
-            if (getRes.ok) {
-                const getData = await getRes.json();
-                sha = getData.sha;
-            }
-
-            // Envoi ou mise à jour du fichier
-            const res = await fetch(url, {
-                method: "PUT",
-                headers: {
-                    "Authorization": `token ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    message: `Ajout des paroles : ${fileName}`,
-                    content: content,
-                    sha: sha ? sha : undefined
-                })
-            });
-
-            if (res.ok) {
-                status.innerText = "✅ Fichier .lrc envoyé avec succès !";
-                status.style.color = "#1DB954";
-            } else {
-                const err = await res.json();
-                status.innerText = "❌ Erreur : " + err.message;
-                status.style.color = "red";
-            }
-        } catch (error) {
-            status.innerText = "❌ Erreur de connexion.";
-            status.style.color = "red";
+    // Charger le token sauvegardé automatiquement au démarrage de la page
+    window.onload = function() {
+        const savedToken = localStorage.getItem('github_lrc_token');
+        if (savedToken) {
+            document.getElementById('token').value = savedToken;
         }
     };
 
-    reader.readAsText(file);
-}
+    async function uploadLrc() {
+        const token = document.getElementById('token').value.trim();
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+
+        if (!token || fileInput.files.length === 0) {
+            status.innerText = "Veuillez remplir tous les champs.";
+            status.style.color = "red";
+            return;
+        }
+
+        // Sauvegarder le token dans le navigateur pour ne plus le retaper
+        localStorage.setItem('github_lrc_token', token);
+
+        const file = fileInput.files[0];
+        const fileName = file.name;
+        const reader = new FileReader();
+
+        reader.onload = async function(e) {
+            const content = btoa(unescape(encodeURIComponent(e.target.result)));
+            const url = `https://api.github.com/repos/raamsi/aimpe3-lyrics/contents/lyrics/${fileName}`;
+
+            status.innerText = "Téléversement en cours...";
+            status.style.color = "orange";
+
+            try {
+                let sha = "";
+                const getRes = await fetch(url, { headers: { "Authorization": `token ${token}` } });
+                if (getRes.ok) {
+                    const getData = await getRes.json();
+                    sha = getData.sha;
+                }
+
+                const res = await fetch(url, {
+                    method: "PUT",
+                    headers: {
+                        "Authorization": `token ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        message: `Ajout des paroles : ${fileName}`,
+                        content: content,
+                        sha: sha ? sha : undefined
+                    })
+                });
+
+                if (res.ok) {
+                    status.innerText = "✅ Fichier .lrc envoyé avec succès !";
+                    status.style.color = "#1DB954";
+                } else {
+                    const err = await res.json();
+                    status.innerText = "❌ Erreur : " + err.message;
+                    status.style.color = "red";
+                }
+            } catch (error) {
+                status.innerText = "❌ Erreur de connexion.";
+                status.style.color = "red";
+            }
+        };
+
+        reader.readAsText(file);
+    }
 </script>
+
+
 
 </body>
 </html>
