@@ -3,104 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AimpE3 - Paroles Drive</title>
+    <title>AimpE3 - Gestionnaire de Paroles</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 10px; max-width: 400px; margin: auto; }
-        input, button { width: 100%; margin-top: 10px; padding: 10px; box-sizing: border-box; }
-        button { background: #1DB954; color: white; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
-        #status { margin-top: 15px; font-weight: bold; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; margin: 0; padding: 20px; }
+        .container { max-width: 450px; margin: auto; background: #1e1e1e; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { color: #1DB954; text-align: center; margin-bottom: 20px; }
+        input[type="email"], input[type="password"], input[type="file"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #333; border-radius: 6px; background: #2a2a2a; color: white; box-sizing: border-box; }
+        button { width: 100%; background-color: #1DB954; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #1ed760; }
+        .hidden { display: none; }
+        .switch-btn { background: none; color: #b3b3b3; border: none; text-decoration: underline; margin-top: 15px; font-size: 0.9em; }
+        #status { margin-top: 15px; text-align: center; font-weight: bold; }
+        .user-info { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px; border-radius: 6px; margin-bottom: 15px; }
+        .logout-btn { background: #e74c3c; width: auto; padding: 6px 12px; margin: 0; }
     </style>
 </head>
 <body>
 
-<div class="box">
-    <h2>🎵 Uploader un fichier .lrc</h2>
-    
-    <label>GitHub Personal Access Token :</label>
-    <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx">
+<div class="container">
+    <h2>🎵 AimpE3 Lyrics Studio</h2>
 
-    <label>Fichier .lrc :</label>
-    <input type="file" id="fileInput" accept=".lrc">
+    <!-- Formulaire d'authentification -->
+    <div id="auth-section">
+        <h3 id="form-title">Connexion</h3>
+        <input type="email" id="email" placeholder="Adresse Email">
+        <input type="password" id="password" placeholder="Mot de passe">
+        
+        <button id="btn-auth" onclick="handleAuth()">Se connecter</button>
+        <button class="switch-btn" id="btn-switch" onclick="toggleAuthMode()">Pas encore de compte ? S'inscrire</button>
+    </div>
 
-    <button onclick="uploadLrc()">Envoyer sur GitHub</button>
+    <!-- Espace d'upload réservé aux membres connectés -->
+    <div id="upload-section" class="hidden">
+        <div class="user-info">
+            <span id="user-email"></span>
+            <button class="logout-btn" onclick="logout()">Déconnexion</button>
+        </div>
+
+        <h3>Uploader un fichier .lrc</h3>
+        <input type="file" id="fileInput" accept=".lrc">
+        <button onclick="uploadLrc()">Publier sur le serveur</button>
+    </div>
 
     <div id="status"></div>
 </div>
-<script>
-    // Charger le token sauvegardé automatiquement au démarrage de la page
-    window.onload = function() {
-        const savedToken = localStorage.getItem('github_lrc_token');
-        if (savedToken) {
-            document.getElementById('token').value = savedToken;
+
+<!-- SDK Firebase -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    // VOTRE CONFIGURATION FIREBASE À COLLER ICI :
+    const firebaseConfig = {
+        apiKey: "AIzaSyAcxJph9rXIiWPbDQB5_KbKunUQxnMntqs",
+        authDomain: "aimpe3-lyrics-web.firebaseapp.com",
+        projectId: "aimpe3-lyrics-web",
+        storageBucket: "aimpe3-lyrics-web.firebasestorage.app",
+        messagingSenderId: "1086295718119",
+        appId: "1:1086295718119:web:e12242334e598066130a42"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    let isSignUp = false;
+
+    // Gestion du basculement Connexion / Inscription
+    window.toggleAuthMode = function() {
+        isSignUp = !isSignUp;
+        document.getElementById('form-title').innerText = isSignUp ? "Créer un compte" : "Connexion";
+        document.getElementById('btn-auth').innerText = isSignUp ? "S'inscrire" : "Se connecter";
+        document.getElementById('btn-switch').innerText = isSignUp ? "Déjà un compte ? Se connecter" : "Pas encore de compte ? S'inscrire";
+    };
+
+    // Authentification User
+    window.handleAuth = async function() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const status = document.getElementById('status');
+
+        try {
+            if (isSignUp) {
+                await createUserWithEmailAndPassword(auth, email, password);
+                status.innerText = "Compte créé avec succès !";
+            } else {
+                await signInWithEmailAndPassword(auth, email, password);
+                status.innerText = "Connexion réussie !";
+            }
+            status.style.color = "#1DB954";
+        } catch (error) {
+            status.innerText = "Erreur : " + error.message;
+            status.style.color = "red";
         }
     };
 
-    async function uploadLrc() {
-        const token = document.getElementById('token').value.trim();
-        const fileInput = document.getElementById('fileInput');
+    // Déconnexion
+    window.logout = function() {
+        signOut(auth);
+    };
+
+    // Observer l'état de connexion de l'utilisateur
+    onAuthStateChanged(auth, (user) => {
+        const authSection = document.getElementById('auth-section');
+        const uploadSection = document.getElementById('upload-section');
         const status = document.getElementById('status');
+        status.innerText = "";
 
-        if (!token || fileInput.files.length === 0) {
-            status.innerText = "Veuillez remplir tous les champs.";
-            status.style.color = "red";
-            return;
+        if (user) {
+            authSection.classList.add('hidden');
+            uploadSection.classList.remove('hidden');
+            document.getElementById('user-email').innerText = user.email;
+        } else {
+            authSection.classList.remove('hidden');
+            uploadSection.classList.add('hidden');
         }
-
-        // Sauvegarder le token dans le navigateur pour ne plus le retaper
-        localStorage.setItem('github_lrc_token', token);
-
-        const file = fileInput.files[0];
-        const fileName = file.name;
-        const reader = new FileReader();
-
-        reader.onload = async function(e) {
-            const content = btoa(unescape(encodeURIComponent(e.target.result)));
-            const url = `https://api.github.com/repos/raamsi/aimpe3-lyrics/contents/lyrics/${fileName}`;
-
-            status.innerText = "Téléversement en cours...";
-            status.style.color = "orange";
-
-            try {
-                let sha = "";
-                const getRes = await fetch(url, { headers: { "Authorization": `token ${token}` } });
-                if (getRes.ok) {
-                    const getData = await getRes.json();
-                    sha = getData.sha;
-                }
-
-                const res = await fetch(url, {
-                    method: "PUT",
-                    headers: {
-                        "Authorization": `token ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        message: `Ajout des paroles : ${fileName}`,
-                        content: content,
-                        sha: sha ? sha : undefined
-                    })
-                });
-
-                if (res.ok) {
-                    status.innerText = "✅ Fichier .lrc envoyé avec succès !";
-                    status.style.color = "#1DB954";
-                } else {
-                    const err = await res.json();
-                    status.innerText = "❌ Erreur : " + err.message;
-                    status.style.color = "red";
-                }
-            } catch (error) {
-                status.innerText = "❌ Erreur de connexion.";
-                status.style.color = "red";
-            }
-        };
-
-        reader.readAsText(file);
-    }
+    });
 </script>
-
-
 
 </body>
 </html>
