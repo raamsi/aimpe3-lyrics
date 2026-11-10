@@ -48,7 +48,7 @@
         <button class="secondary-btn" type="button" id="btn-check-verified" style="background:var(--primary);">J'ai vérifié</button>
     </div>
 
-    <!-- ========== UPLOAD ========== -->
+    <!-- ========== UPLOAD + RÉPERTOIRE ========== -->
     <div id="upload-section" class="hidden">
         <div class="user-info">
             <span id="user-email">—</span>
@@ -74,26 +74,29 @@
         </div>
 
         <button type="button" id="btn-upload" disabled>Publier</button>
+
+        <!-- ========== RÉPERTOIRE ========== -->
+        <div id="catalog-section">
+            <h3>📂 Répertoire de tous les fichiers .lrc</h3>
+            <button type="button" id="btn-load-catalog">Actualiser la liste</button>
+            <div id="catalog-table-container">
+                <table id="catalog-table">
+                    <thead>
+                        <tr>
+                            <th>Artiste</th>
+                            <th>Titre</th>
+                            <th>Timestamps</th>
+                            <th>Durée</th>
+                            <th>Uploadé par</th>
+                        </tr>
+                    </thead>
+                    <tbody id="catalog-body">
+                        <tr><td colspan="5">Cliquez sur « Actualiser la liste »</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-    <!-- Répertoire des fichiers -->
-<div id="catalog-section" class="hidden">
-    <h3>📂 Répertoire de tous les fichiers .lrc</h3>
-    <button type="button" id="btn-load-catalog">Actualiser la liste</button>
-    <div id="catalog-table-container">
-        <table id="catalog-table">
-            <thead>
-                <tr>
-                    <th>Artiste</th>
-                    <th>Titre</th>
-                    <th>Timestamps</th>
-                    <th>Durée</th>
-                    <th>Uploadé par</th>
-                </tr>
-            </thead>
-            <tbody id="catalog-body"></tbody>
-        </table>
-    </div>
-</div>
 
     <div id="status" role="status" aria-live="polite"></div>
 </div>
