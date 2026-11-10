@@ -1,5 +1,5 @@
 /**
- * auth.js — Authentification + vérification email + anti-bruteforce
+ * auth.js — Authentification robuste (null-safe)
  */
 
 import {
@@ -21,6 +21,17 @@ let isSignUp = false;
 let lastResendTime = 0;
 
 const $ = (id) => document.getElementById(id);
+
+// ✅ Helper : attache un écouteur seulement si l'élément existe
+function on(id, event, handler) {
+    const el = $(id);
+    if (el) {
+        el.addEventListener(event, handler);
+        return true;
+    }
+    console.warn(`[auth] Élément #${id} introuvable — écouteur non attaché`);
+    return false;
+}
 
 function setStatus(msg, color = '#ffffff') {
     const status = $('status');
@@ -105,44 +116,64 @@ function updateStrength(pwd) {
 }
 
 export function initAuth(auth) {
+    console.log("[auth] Initialisation…");
 
-    $('btn-switch').addEventListener('click', () => {
+    // Basculement
+    on('btn-switch', 'click', () => {
         isSignUp = !isSignUp;
-        $('form-title').innerText = isSignUp ? "Créer un compte" : "Connexion";
-        $('btn-auth').innerText = isSignUp ? "S'inscrire" : "Se connecter";
-        $('btn-switch').innerText = isSignUp
-            ? "Déjà un compte ? Se connecter"
-            : "Pas encore de compte ? S'inscrire";
-        $('strength-wrapper').classList.toggle('hidden', !isSignUp);
-        $('password').setAttribute('autocomplete', isSignUp ? 'new-password' : 'current-password');
-        $('password-confirm').value = '';
-        $('password').value = '';
+        const formTitle = $('form-title');
+        const btnAuth = $('btn-auth');
+        const btnSwitch = $('btn-switch');
+        const strengthWrapper = $('strength-wrapper');
+        const passwordInput = $('password');
+        const passwordConfirm = $('password-confirm');
+
+        if (formTitle) formTitle.innerText = isSignUp ? "Créer un compte" : "Connexion";
+        if (btnAuth) btnAuth.innerText = isSignUp ? "S'inscrire" : "Se connecter";
+        if (btnSwitch) {
+            btnSwitch.innerText = isSignUp
+                ? "Déjà un compte ? Se connecter"
+                : "Pas encore de compte ? S'inscrire";
+        }
+        if (strengthWrapper) strengthWrapper.classList.toggle('hidden', !isSignUp);
+        if (passwordInput) passwordInput.setAttribute('autocomplete', isSignUp ? 'new-password' : 'current-password');
+        if (passwordConfirm) passwordConfirm.value = '';
+        if (passwordInput) passwordInput.value = '';
         setStatus("");
         updateStrength('');
     });
 
-    $('password').addEventListener('input', (e) => {
+    on('password', 'input', (e) => {
         if (isSignUp) updateStrength(e.target.value);
     });
 
-    $('btn-auth').addEventListener('click', async () => {
-        const email = $('email').value.trim();
-        const password = $('password').value;
+    on('btn-auth', 'click', async () => {
+        const emailEl = $('email');
+        const passwordEl = $('password');
+        const passwordConfirmEl = $('password-confirm');
         const btn = $('btn-auth');
+
+        if (!emailEl || !passwordEl || !btn) {
+            console.error("[auth] Éléments du formulaire manquants");
+            return;
+        }
+
+        const email = emailEl.value.trim();
+        const password = passwordEl.value;
 
         if (!validateEmail(email)) {
             setStatus("Adresse email invalide.", "#e74c3c");
-            $('email').classList.add('invalid');
+            emailEl.classList.add('invalid');
             return;
         }
-        $('email').classList.remove('invalid');
+        emailEl.classList.remove('invalid');
 
         if (isSignUp) {
             if (!isPasswordStrong(password)) {
                 setStatus(`Mot de passe trop faible (min. ${PASSWORD_MIN_LENGTH} car., maj., min., chiffre, spécial).`, "#e74c3c");
                 return;
             }
-            if (password !== $('password-confirm').value) {
+            if (passwordConfirmEl && password !== passwordConfirmEl.value) {
                 setStatus("Les mots de passe ne correspondent pas.", "#e74c3c");
                 return;
             }
@@ -173,9 +204,10 @@ export function initAuth(auth) {
                 resetLoginAttempts();
                 setStatus("Connexion réussie !", "#1DB954");
             }
-            $('password').value = '';
-            $('password-confirm').value = '';
+            passwordEl.value = '';
+            if (passwordConfirmEl) passwordConfirmEl.value = '';
         } catch (error) {
+            console.error("[auth] Erreur :", error.code, error.message);
             let msg = "Identifiants invalides ou problème de connexion.";
             if (error.code === 'auth/email-already-in-use') {
                 msg = "Un compte existe déjà avec cet email.";
@@ -185,6 +217,8 @@ export function initAuth(auth) {
                 msg = "Trop de tentatives. Réessayez plus tard.";
             } else if (error.code === 'auth/network-request-failed') {
                 msg = "Problème de connexion réseau.";
+            } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                msg = "Email ou mot de passe incorrect.";
             }
             if (!isSignUp) {
                 const data = recordFailedAttempt();
@@ -200,15 +234,18 @@ export function initAuth(auth) {
     });
 
     ['email', 'password', 'password-confirm'].forEach(id => {
-        $(id).addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') $('btn-auth').click();
+        on(id, 'keydown', (e) => {
+            if (e.key === 'Enter') {
+                const btn = $('btn-auth');
+                if (btn) btn.click();
+            }
         });
     });
 
-    $('btn-logout').addEventListener('click', () => signOut(auth));
-    $('btn-logout-verify').addEventListener('click', () => signOut(auth));
+    on('btn-logout', 'click', () => signOut(auth));
+    on('btn-logout-verify', 'click', () => signOut(auth));
 
-    $('btn-resend').addEventListener('click', async () => {
+    on('btn-resend', 'click', async () => {
         const user = auth.currentUser;
         if (!user) return;
 
@@ -220,7 +257,7 @@ export function initAuth(auth) {
         }
 
         const btn = $('btn-resend');
-        btn.disabled = true;
+        if (btn) btn.disabled = true;
         try {
             await sendEmailVerification(user);
             lastResendTime = now;
@@ -232,16 +269,16 @@ export function initAuth(auth) {
                 setStatus("Erreur lors du renvoi. Réessayez.", "#e74c3c");
             }
         } finally {
-            btn.disabled = false;
+            if (btn) btn.disabled = false;
         }
     });
 
-    $('btn-check-verified').addEventListener('click', async () => {
+    on('btn-check-verified', 'click', async () => {
         const user = auth.currentUser;
         if (!user) return;
 
         const btn = $('btn-check-verified');
-        btn.disabled = true;
+        if (btn) btn.disabled = true;
         setStatus("Vérification en cours…", "#ffffff");
 
         try {
@@ -255,7 +292,7 @@ export function initAuth(auth) {
         } catch (error) {
             setStatus("Erreur de vérification. Réessayez.", "#e74c3c");
         } finally {
-            btn.disabled = false;
+            if (btn) btn.disabled = false;
         }
     });
 
@@ -271,4 +308,6 @@ export function initAuth(auth) {
             } catch (e) { /* silencieux */ }
         }
     }, 5000);
+
+    console.log("[auth] Initialisation terminée");
 }
