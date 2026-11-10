@@ -1,6 +1,5 @@
 /**
- * Module d'authentification
- * Gère : connexion, inscription, vérification email, anti-bruteforce
+ * auth.js — Authentification + vérification email + anti-bruteforce
  */
 
 import {
@@ -11,7 +10,6 @@ import {
     reload
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-// ========== CONSTANTES ==========
 const PASSWORD_MIN_LENGTH = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
@@ -22,7 +20,6 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 let isSignUp = false;
 let lastResendTime = 0;
 
-// ========== HELPERS ==========
 const $ = (id) => document.getElementById(id);
 
 function setStatus(msg, color = '#ffffff') {
@@ -51,7 +48,6 @@ function isPasswordStrong(pwd) {
     return Object.values(getPasswordChecks(pwd)).every(Boolean);
 }
 
-// ========== ANTI-BRUTEFORCE ==========
 function getLoginAttempts() {
     try {
         const data = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) || '{}');
@@ -85,7 +81,6 @@ function isLockedOut() {
     return data.lockedUntil && Date.now() < data.lockedUntil;
 }
 
-// ========== INDICATEUR DE FORCE ==========
 function updateStrength(pwd) {
     const checks = getPasswordChecks(pwd);
     const score = Object.values(checks).filter(Boolean).length;
@@ -109,10 +104,8 @@ function updateStrength(pwd) {
     });
 }
 
-// ========== INITIALISATION ==========
 export function initAuth(auth) {
 
-    // ---- Basculement connexion / inscription ----
     $('btn-switch').addEventListener('click', () => {
         isSignUp = !isSignUp;
         $('form-title').innerText = isSignUp ? "Créer un compte" : "Connexion";
@@ -128,12 +121,10 @@ export function initAuth(auth) {
         updateStrength('');
     });
 
-    // ---- Force du mot de passe en temps réel ----
     $('password').addEventListener('input', (e) => {
         if (isSignUp) updateStrength(e.target.value);
     });
 
-    // ---- Soumission du formulaire ----
     $('btn-auth').addEventListener('click', async () => {
         const email = $('email').value.trim();
         const password = $('password').value;
@@ -208,18 +199,15 @@ export function initAuth(auth) {
         }
     });
 
-    // ---- Touche Entrée ----
     ['email', 'password', 'password-confirm'].forEach(id => {
         $(id).addEventListener('keydown', (e) => {
             if (e.key === 'Enter') $('btn-auth').click();
         });
     });
 
-    // ---- Déconnexions ----
     $('btn-logout').addEventListener('click', () => signOut(auth));
     $('btn-logout-verify').addEventListener('click', () => signOut(auth));
 
-    // ---- Renvoi email de vérification ----
     $('btn-resend').addEventListener('click', async () => {
         const user = auth.currentUser;
         if (!user) return;
@@ -248,7 +236,6 @@ export function initAuth(auth) {
         }
     });
 
-    // ---- Vérifier si l'email a été validé ----
     $('btn-check-verified').addEventListener('click', async () => {
         const user = auth.currentUser;
         if (!user) return;
@@ -272,7 +259,6 @@ export function initAuth(auth) {
         }
     });
 
-    // ---- Polling automatique de vérification ----
     setInterval(async () => {
         const user = auth.currentUser;
         if (user && !user.emailVerified) {
