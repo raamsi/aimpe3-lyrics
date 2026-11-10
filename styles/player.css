@@ -1,9 +1,9 @@
-/* Lecteur audio */
 .player-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 16px;
+    gap: 12px;
 }
 
 .track-info h3 {
@@ -18,7 +18,32 @@
     font-size: 0.9rem;
 }
 
-/* Zone des paroles avec défilement */
+.audio-loader {
+    margin-bottom: 12px;
+}
+
+.audio-label {
+    display: block;
+    padding: 12px;
+    background: var(--input-bg);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.audio-label:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.audio-loader input[type="file"] {
+    display: none;
+}
+
 .lyrics-viewport {
     height: 300px;
     overflow-y: auto;
@@ -29,7 +54,6 @@
     border-radius: var(--radius-sm);
     margin: 16px 0;
     padding: 0 16px;
-    /* Masquer la scrollbar tout en gardant le scroll */
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
 }
@@ -42,14 +66,12 @@
     border-radius: 2px;
 }
 
-/* Container interne pour le scroll */
 .lyrics-container {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-/* Ligne de parole */
 .lyric-line {
     padding: 8px 12px;
     font-size: 1rem;
@@ -62,7 +84,6 @@
     cursor: default;
 }
 
-/* Ligne active */
 .lyric-line.active {
     color: var(--primary);
     font-size: 1.15rem;
@@ -71,12 +92,10 @@
     text-shadow: 0 0 20px rgba(29, 185, 84, 0.4);
 }
 
-/* Lignes passées légèrement plus sombres */
 .lyric-line.passed {
     opacity: 0.35;
 }
 
-/* Contrôles */
 .player-controls {
     display: flex;
     align-items: center;
@@ -98,6 +117,8 @@
     justify-content: center;
     flex-shrink: 0;
     transition: transform 0.1s, background 0.2s;
+    margin: 0;
+    padding: 0;
 }
 
 .play-btn:hover {
@@ -122,6 +143,8 @@
     background: var(--input-bg);
     border-radius: 2px;
     outline: none;
+    margin: 0;
+    padding: 0;
 }
 
 .progress-container input[type="range"]::-webkit-slider-thumb {
@@ -133,7 +156,6 @@
     cursor: pointer;
 }
 
-/* Offset control */
 .offset-control {
     display: flex;
     align-items: center;
@@ -154,6 +176,7 @@
     background: var(--bg);
     color: white;
     font-size: 0.85rem;
+    margin: 0;
 }
 
 .offset-control .hint {
@@ -162,7 +185,6 @@
     text-align: left;
 }
 
-/* Responsive */
 @media (max-width: 500px) {
     .lyrics-viewport {
         height: 240px;
