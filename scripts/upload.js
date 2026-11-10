@@ -1,10 +1,11 @@
 /**
- * Module d'upload de fichiers .lrc vers Firestore
+ * upload.js — Upload de fichiers .lrc vers Firestore
+ * Détecte l'absence de timestamps et avertit l'utilisateur
  */
 
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-const MAX_FILE_SIZE = 500 * 1024; // 500 Ko
+const MAX_FILE_SIZE = 500 * 1024;
 
 function setStatus(msg, color = '#ffffff') {
     const status = document.getElementById('status');
@@ -24,7 +25,6 @@ export function initUpload(auth, db) {
     }
 
     btnUpload.addEventListener('click', async () => {
-        // Double sécurité : email vérifié requis
         if (!auth.currentUser || !auth.currentUser.emailVerified) {
             setStatus("Votre email doit être vérifié avant de publier.", "#e74c3c");
             return;
@@ -37,7 +37,6 @@ export function initUpload(auth, db) {
 
         const file = fileInput.files[0];
 
-        // Validations
         if (!/\.lrc$/i.test(file.name)) {
             setStatus("Seuls les fichiers .lrc sont acceptés.", "#e74c3c");
             return;
@@ -85,6 +84,25 @@ export function initUpload(auth, db) {
                 return;
             }
 
+            // ✅ Détection des timestamps
+            const hasTimestamps = /\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]/.test(lyricsContent);
+            const timestampCount = (lyricsContent.match(/\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]/g) || []).length;
+
+            console.log(`[UPLOAD] Timestamps détectés : ${timestampCount}`);
+
+            if (!hasTimestamps) {
+                const proceed = confirm(
+                    "⚠️ Aucun timestamp [mm:ss.xx] détecté dans ce fichier.\n\n" +
+                    "La synchronisation ne fonctionnera pas sans timestamps.\n\n" +
+                    "Voulez-vous quand même publier ?"
+                );
+                if (!proceed) {
+                    setStatus("Upload annulé. Ajoutez des timestamps [mm:ss.xx] au fichier.", "#f39c12");
+                    btnUpload.disabled = false;
+                    return;
+                }
+            }
+
             const queryKey = (artist + "_" + title)
                 .toLowerCase()
                 .replace(/[^a-z0-9]/g, "_")
@@ -98,17 +116,22 @@ export function initUpload(auth, db) {
                     titleOriginal: title,
                     lyricsContent: lyricsContent,
                     size: file.size,
+                    timestampCount: timestampCount,
                     ownerEmail: auth.currentUser.email,
                     ownerEmailVerified: true,
                     updatedAt: new Date()
                 });
 
-                setStatus("Paroles publiées avec succès !", "#1DB954");
+                if (hasTimestamps) {
+                    setStatus(`Paroles publiées ! ${timestampCount} timestamps détectés.`, "#1DB954");
+                } else {
+                    setStatus("Paroles publiées (sans timestamps — pas de synchronisation).", "#f39c12");
+                }
+
                 fileInput.value = "";
 
-                // Émettre un événement pour que main.js puisse réagir
                 window.dispatchEvent(new CustomEvent('lyrics-uploaded', {
-                    detail: { artist, title, queryKey }
+                    detail: { artist, title, queryKey, timestampCount }
                 }));
             } catch (error) {
                 if (error.code === 'permission-denied') {
