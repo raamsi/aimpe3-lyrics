@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#121212">
     <title>AimpE3 - Gestionnaire de Paroles</title>
     <style>
-        /* ========== RESET & BASE ========== */
         *, *::before, *::after {
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
@@ -17,6 +16,7 @@
             --primary-hover: #1ed760;
             --danger: #e74c3c;
             --warning: #f39c12;
+            --info: #3498db;
             --bg: #121212;
             --card-bg: #1e1e1e;
             --input-bg: #2a2a2a;
@@ -145,6 +145,12 @@
             min-height: 40px;
         }
 
+        .secondary-btn {
+            background: var(--info);
+            margin-top: 10px;
+        }
+        .secondary-btn:hover:not(:disabled) { background: #2980b9; }
+
         .hidden { display: none !important; }
 
         #status {
@@ -181,6 +187,42 @@
             margin-bottom: 12px;
             text-align: center;
             line-height: 1.5;
+        }
+
+        /* Bannière de vérification email */
+        .verify-banner {
+            background: rgba(243, 156, 18, 0.15);
+            border: 1px solid var(--warning);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+
+        .verify-banner .icon {
+            font-size: 2rem;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .verify-banner p {
+            margin: 0 0 8px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text);
+        }
+
+        .verify-banner .email-highlight {
+            color: var(--warning);
+            font-weight: bold;
+            word-break: break-all;
+        }
+
+        .verify-banner small {
+            display: block;
+            margin-top: 8px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
         }
 
         .password-strength {
@@ -275,6 +317,7 @@
     <h2>🎵 AimpE3 Lyrics Studio</h2>
     <p class="subtitle">Publiez et gérez vos paroles synchronisées</p>
 
+    <!-- ========== SECTION AUTHENTIFICATION ========== -->
     <div id="auth-section">
         <h3 id="form-title">Connexion</h3>
 
@@ -309,6 +352,36 @@
         </button>
     </div>
 
+    <!-- ========== SECTION VÉRIFICATION EMAIL ========== -->
+    <div id="verify-section" class="hidden">
+        <div class="user-info">
+            <span id="verify-user-email" title="">—</span>
+            <button class="logout-btn" type="button" id="btn-logout-verify">Déconnexion</button>
+        </div>
+
+        <div class="verify-banner">
+            <span class="icon">📧</span>
+            <p>
+                Un email de vérification a été envoyé à<br>
+                <span class="email-highlight" id="verify-email-highlight">—</span>
+            </p>
+            <p>Cliquez sur le lien dans cet email pour activer votre compte.</p>
+            <small>Pensez à vérifier vos spams. L'email peut prendre 1-2 minutes.</small>
+        </div>
+
+        <button class="secondary-btn" type="button" id="btn-resend">
+            Renvoyer l'email de vérification
+        </button>
+        <button class="secondary-btn" type="button" id="btn-check-verified"
+                style="background: var(--primary);">
+            J'ai vérifié mon email
+        </button>
+        <button class="switch-btn" type="button" id="btn-change-email">
+            Changer d'adresse email
+        </button>
+    </div>
+
+    <!-- ========== SECTION UPLOAD (email vérifié requis) ========== -->
     <div id="upload-section" class="hidden">
         <div class="user-info">
             <span id="user-email" title="">—</span>
@@ -329,21 +402,17 @@
     <div id="status" role="status" aria-live="polite"></div>
 </div>
 
-<!-- ============================================================
-     SDK Firebase + App Check
-     ============================================================ -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-
-    // ✅ APP CHECK : import du module App Check
     import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-
     import {
         getAuth,
         signInWithEmailAndPassword,
         createUserWithEmailAndPassword,
         onAuthStateChanged,
-        signOut
+        signOut,
+        sendEmailVerification,
+        reload
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -358,34 +427,26 @@
 
     const app = initializeApp(firebaseConfig);
 
-    // ============================================================
-    // ✅ APP CHECK — INITIALISATION AVANT getAuth / getFirestore
-    // ============================================================
-    // ⚠️ REMPLACEZ 'VOTRE_CLE_DE_SITE_RECAPTCHA_V3' par votre clé publique
-    //    obtenue sur https://www.google.com/recaptcha/admin/create
-    //    (choisir reCAPTCHA v3, ajouter vos domaines + localhost)
-    //
-    //    La clé SECRÈTE correspondante doit être enregistrée dans
-    //    Firebase Console → Sécurité → App Check → Applications
-    // ============================================================
-    const appCheck = initializeAppCheck(app, {
+    // ✅ APP CHECK — AVANT getAuth / getFirestore
+    // ⚠️ Remplacez par votre clé de site reCAPTCHA v3
+    initializeAppCheck(app, {
         provider: new ReCaptchaV3Provider('VOTRE_CLE_DE_SITE_RECAPTCHA_V3'),
         isTokenAutoRefreshEnabled: true
     });
 
-    // ✅ APP CHECK actif — on peut maintenant initialiser les autres services
     const auth = getAuth(app);
     const db = getFirestore(app);
 
     let isSignUp = false;
 
-    // ========== CONSTANTES DE SÉCURITÉ ==========
+    // ========== CONSTANTES ==========
     const PASSWORD_MIN_LENGTH = 12;
     const MAX_FILE_SIZE = 500 * 1024;
     const MAX_LOGIN_ATTEMPTS = 5;
     const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
     const ATTEMPTS_KEY = 'aimpe3_login_attempts';
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const RESEND_COOLDOWN_MS = 60 * 1000; // 1 minute entre 2 renvois
 
     // ========== HELPERS ==========
     const $ = (id) => document.getElementById(id);
@@ -423,26 +484,19 @@
                 return { count: 0 };
             }
             return data;
-        } catch {
-            return { count: 0 };
-        }
+        } catch { return { count: 0 }; }
     }
 
     function recordFailedAttempt() {
         const data = getLoginAttempts();
         const count = (data.count || 0) + 1;
         const newData = { count };
-        if (count >= MAX_LOGIN_ATTEMPTS) {
-            newData.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
-        }
+        if (count >= MAX_LOGIN_ATTEMPTS) newData.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
         localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(newData));
         return newData;
     }
 
-    function resetLoginAttempts() {
-        localStorage.removeItem(ATTEMPTS_KEY);
-    }
-
+    function resetLoginAttempts() { localStorage.removeItem(ATTEMPTS_KEY); }
     function isLockedOut() {
         const data = getLoginAttempts();
         return data.lockedUntil && Date.now() < data.lockedUntil;
@@ -468,22 +522,15 @@
     function updateStrength(pwd) {
         const checks = getPasswordChecks(pwd);
         const score = Object.values(checks).filter(Boolean).length;
-
         const bar = $('strength-bar');
         bar.classList.remove('weak', 'medium', 'strong');
-        if (pwd.length === 0) {
-            bar.style.width = '0';
-        } else if (score <= 2) {
-            bar.classList.add('weak');
-        } else if (score <= 4) {
-            bar.classList.add('medium');
-        } else {
-            bar.classList.add('strong');
-        }
+        if (pwd.length === 0) bar.style.width = '0';
+        else if (score <= 2) bar.classList.add('weak');
+        else if (score <= 4) bar.classList.add('medium');
+        else bar.classList.add('strong');
 
         document.querySelectorAll('#pwd-reqs li').forEach(li => {
-            const req = li.dataset.req;
-            li.classList.toggle('ok', !!checks[req]);
+            li.classList.toggle('ok', !!checks[li.dataset.req]);
         });
     }
 
@@ -532,8 +579,10 @@
 
         try {
             if (isSignUp) {
-                await createUserWithEmailAndPassword(auth, email, password);
-                setStatus("Compte créé avec succès !", "#1DB954");
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                // ✅ Envoi de l'email de vérification
+                await sendEmailVerification(userCredential.user);
+                setStatus("Compte créé ! Vérifiez votre email pour activer votre compte.", "#1DB954");
             } else {
                 await signInWithEmailAndPassword(auth, email, password);
                 resetLoginAttempts();
@@ -552,12 +601,6 @@
             } else if (error.code === 'auth/network-request-failed') {
                 msg = "Problème de connexion réseau.";
             }
-
-            // ✅ APP CHECK : erreur possible si App Check est mal configuré ou si le token est rejeté
-            if (error.message && error.message.includes('app-check')) {
-                msg = "Vérification de sécurité échouée. Vérifiez la configuration App Check.";
-            }
-
             if (!isSignUp) {
                 const data = recordFailedAttempt();
                 if (data.lockedUntil) {
@@ -577,13 +620,95 @@
         });
     });
 
-    // ========== DÉCONNEXION ==========
+    // ========== DÉCONNEXIONS ==========
     $('btn-logout').addEventListener('click', () => signOut(auth));
+    $('btn-logout-verify').addEventListener('click', () => signOut(auth));
+
+    // ========== RENVOI EMAIL DE VÉRIFICATION ==========
+    let lastResendTime = 0;
+
+    $('btn-resend').addEventListener('click', async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const now = Date.now();
+        if (now - lastResendTime < RESEND_COOLDOWN_MS) {
+            const remaining = Math.ceil((RESEND_COOLDOWN_MS - (now - lastResendTime)) / 1000);
+            setStatus(`Patientez ${remaining}s avant de renvoyer.`, "#f39c12");
+            return;
+        }
+
+        const btn = $('btn-resend');
+        btn.disabled = true;
+        try {
+            await sendEmailVerification(user);
+            lastResendTime = now;
+            setStatus("Email de vérification renvoyé !", "#1DB954");
+        } catch (error) {
+            if (error.code === 'auth/too-many-requests') {
+                setStatus("Trop de demandes. Réessayez plus tard.", "#e74c3c");
+            } else {
+                setStatus("Erreur lors du renvoi. Réessayez.", "#e74c3c");
+            }
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // ========== VÉRIFIER SI L'EMAIL A ÉTÉ VALIDÉ ==========
+    $('btn-check-verified').addEventListener('click', async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const btn = $('btn-check-verified');
+        btn.disabled = true;
+        setStatus("Vérification en cours…", "#ffffff");
+
+        try {
+            await reload(user);
+            if (user.emailVerified) {
+                setStatus("Email vérifié ! Vous pouvez maintenant uploader.", "#1DB954");
+                updateUI(user);
+            } else {
+                setStatus("Email pas encore vérifié. Cliquez sur le lien reçu.", "#f39c12");
+            }
+        } catch (error) {
+            setStatus("Erreur de vérification. Réessayez.", "#e74c3c");
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // ========== CHANGER D'EMAIL (supprime le compte actuel) ==========
+    $('btn-change-email').addEventListener('click', async () => {
+        if (confirm("Votre compte actuel sera supprimé. Continuer ?\n\nUtilisez la même adresse pour vous réinscrire, ou une autre.")) {
+            const user = auth.currentUser;
+            if (!user) return;
+            try {
+                await user.delete();
+                setStatus("Compte supprimé. Vous pouvez vous réinscrire.", "#1DB954");
+                $('email').value = '';
+                $('password').value = '';
+            } catch (error) {
+                if (error.code === 'auth/requires-recent-login') {
+                    setStatus("Reconnectez-vous puis réessayez.", "#e74c3c");
+                } else {
+                    setStatus("Erreur. Réessayez.", "#e74c3c");
+                }
+            }
+        }
+    });
 
     // ========== UPLOAD .LRC ==========
     $('btn-upload').addEventListener('click', async () => {
         const fileInput = $('fileInput');
         const btn = $('btn-upload');
+
+        // Double sécurité : vérifier emailVerified avant upload
+        if (!auth.currentUser || !auth.currentUser.emailVerified) {
+            setStatus("Votre email doit être vérifié avant de publier.", "#e74c3c");
+            return;
+        }
 
         if (fileInput.files.length === 0) {
             setStatus("Veuillez sélectionner un fichier .lrc !", "#f39c12");
@@ -644,9 +769,6 @@
                 .slice(0, 200);
 
             try {
-                // ✅ APP CHECK : cette écriture Firestore sera automatiquement
-                //    accompagnée du token App Check (car initializeAppCheck a été
-                //    appelé AVANT getFirestore).
                 await setDoc(doc(db, "lyrics", queryKey), {
                     artist: artist.toLowerCase(),
                     title: title.toLowerCase(),
@@ -654,16 +776,16 @@
                     titleOriginal: title,
                     lyricsContent: lyricsContent,
                     size: file.size,
+                    ownerEmail: auth.currentUser.email,
+                    ownerEmailVerified: true,
                     updatedAt: new Date()
                 });
 
                 setStatus("Paroles publiées avec succès !", "#1DB954");
                 fileInput.value = "";
             } catch (error) {
-                // ✅ APP CHECK : si l'enforcement est activé et le token invalide,
-                //    Firestore renvoie permission-denied
                 if (error.code === 'permission-denied') {
-                    setStatus("Accès refusé. Vérifiez votre connexion ou la configuration App Check.", "#e74c3c");
+                    setStatus("Accès refusé. Votre email est peut-être non vérifié.", "#e74c3c");
                 } else {
                     setStatus("Erreur lors de l'envoi : " + (error.code || 'inconnu'), "#e74c3c");
                 }
@@ -674,54 +796,76 @@
         reader.readAsText(file);
     });
 
-    // ========== ÉTAT DE CONNEXION ==========
-    onAuthStateChanged(auth, (user) => {
+    // ========== AFFICHAGE DYNAMIQUE SELON L'ÉTAT ==========
+    function updateUI(user) {
         const authSection = $('auth-section');
+        const verifySection = $('verify-section');
         const uploadSection = $('upload-section');
 
-        if (user) {
+        if (!user) {
+            authSection.classList.remove('hidden');
+            verifySection.classList.add('hidden');
+            uploadSection.classList.add('hidden');
+            $('password').value = '';
+            $('password-confirm').value = '';
+            return;
+        }
+
+        if (!user.emailVerified) {
+            // Connecté mais email non vérifié → écran de vérification
             authSection.classList.add('hidden');
+            verifySection.classList.remove('hidden');
+            uploadSection.classList.add('hidden');
+            $('verify-user-email').innerText = user.email;
+            $('verify-user-email').title = user.email;
+            $('verify-email-highlight').innerText = user.email;
+        } else {
+            // Connecté ET vérifié → accès à l'upload
+            authSection.classList.add('hidden');
+            verifySection.classList.add('hidden');
             uploadSection.classList.remove('hidden');
             const emailEl = $('user-email');
             emailEl.innerText = user.email;
             emailEl.title = user.email;
-            setStatus("");
-        } else {
-            authSection.classList.remove('hidden');
-            uploadSection.classList.add('hidden');
-            $('password').value = '';
-            $('password-confirm').value = '';
         }
+    }
+
+    // ========== ÉTAT DE CONNEXION ==========
+    onAuthStateChanged(auth, (user) => {
+        setStatus("");
+        updateUI(user);
     });
-</script>
 
-<!-- ============================================================
-     ⚠️ DÉVELOPPEMENT LOCAL (localhost) — TOKEN DE DEBUG
-     ============================================================
-     Décommentez le bloc ci-dessous UNIQUEMENT pour le développement local.
-     Puis dans la console navigateur, récupérez le token affiché :
-       "AppCheck debug token: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-     Enregistrez-le dans Firebase Console → App Check → Applications
-       → menu ⋮ de votre app → Gérer les jetons de débogage.
-
-     ⚠️ NE JAMAIS laisser ce bloc en production !
-     ============================================================ -->
-<!--
-<script>
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    // ✅ Polling automatique : vérifie toutes les 5s si l'email a été validé
+    //    pendant que l'utilisateur est sur l'écran de vérification
+    setInterval(async () => {
+        const user = auth.currentUser;
+        if (user && !user.emailVerified) {
+            try {
+                await reload(user);
+                if (user.emailVerified) {
+                    setStatus("Email vérifié ! Bienvenue.", "#1DB954");
+                    updateUI(user);
+                }
+            } catch (e) { /* silencieux */ }
+        }
+    }, 5000);
 </script>
--->
 
 <!--
 ==========================================================
-⚠️ RÈGLES FIRESTORE À DÉPLOYER (recommandé)
+⚠️ RÈGLES FIRESTORE — L'EMAIL DOIT ÊTRE VÉRIFIÉ
 ==========================================================
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /lyrics/{docId} {
+      // Lecture publique
       allow read: if true;
+
+      // Écriture : authentifié ET email vérifié ET taille limitée
       allow write: if request.auth != null
+                   && request.auth.token.email_verified == true
                    && request.resource.data.size() < 500000
                    && request.resource.data.lyricsContent is string
                    && request.resource.data.lyricsContent.size() < 500000;
@@ -729,6 +873,22 @@ service cloud.firestore {
   }
 }
 ==========================================================
+
+⚠️ CONFIGURATION FIREBASE REQUISE :
+1. Console Firebase → Authentication → Sign-in method
+   → Email/Password → activer "Email link (passwordless)" si souhaité
+2. Console Firebase → Authentication → Templates
+   → Personnaliser l'email de vérification (expéditeur, langue, etc.)
+3. Console Firebase → Authentication → Settings
+   → Activer "Email enumeration protection"
+4. Console Firebase → App Check → Appliquer l'enforcement
+5. Déployer les règles Firestore ci-dessus
+
+⚠️ DÉVELOPPEMENT LOCAL :
+Décommentez ce bloc AVANT le script module pour App Check debug :
+<script>
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+</script>
 -->
 </body>
 </html>
