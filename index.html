@@ -46,7 +46,6 @@
             min-height: 100dvh;
         }
 
-        /* ========== CONTAINER RESPONSIVE ========== */
         .container {
             width: 100%;
             max-width: 450px;
@@ -77,7 +76,6 @@
             margin-bottom: 16px;
         }
 
-        /* ========== INPUTS ========== */
         input[type="email"],
         input[type="password"],
         input[type="file"] {
@@ -88,7 +86,7 @@
             border-radius: var(--radius-sm);
             background: var(--input-bg);
             color: var(--text);
-            font-size: 16px; /* Évite le zoom auto sur iOS */
+            font-size: 16px;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
 
@@ -103,7 +101,6 @@
             border-color: var(--danger);
         }
 
-        /* ========== BOUTONS ========== */
         button {
             width: 100%;
             background-color: var(--primary);
@@ -116,7 +113,7 @@
             cursor: pointer;
             margin-top: 10px;
             transition: background-color 0.2s, transform 0.1s;
-            min-height: 48px; /* Cible tactile confortable */
+            min-height: 48px;
         }
 
         button:hover:not(:disabled) { background-color: var(--primary-hover); }
@@ -148,7 +145,6 @@
             min-height: 40px;
         }
 
-        /* ========== ÉTATS ========== */
         .hidden { display: none !important; }
 
         #status {
@@ -187,7 +183,6 @@
             line-height: 1.5;
         }
 
-        /* ========== INDICATEUR DE MOT DE PASSE ========== */
         .password-strength {
             height: 4px;
             background: var(--input-bg);
@@ -227,34 +222,21 @@
         .password-requirements li.ok { color: var(--primary); }
         .password-requirements li.ok::before { content: "✓"; color: var(--primary); }
 
-        /* ========== RESPONSIVE : TABLETTE ========== */
         @media (min-width: 600px) {
             body { padding: 30px; }
-            .container {
-                max-width: 520px;
-                padding: 36px;
-            }
-            input[type="email"],
-            input[type="password"],
-            input[type="file"] {
-                padding: 15px 14px;
-            }
+            .container { max-width: 520px; padding: 36px; }
+            input[type="email"], input[type="password"], input[type="file"] { padding: 15px 14px; }
         }
 
-        /* ========== RESPONSIVE : LAPTOP / DESKTOP ========== */
         @media (min-width: 1024px) {
             body { padding: 40px; }
-            .container {
-                max-width: 480px;
-                padding: 40px;
-            }
+            .container { max-width: 480px; padding: 40px; }
             button:hover:not(:disabled) {
                 transform: translateY(-1px);
                 box-shadow: 0 4px 12px rgba(29, 185, 84, 0.25);
             }
         }
 
-        /* ========== RESPONSIVE : PETITS MOBILES ========== */
         @media (max-width: 400px) {
             body { padding: 12px; }
             .container { padding: 20px; border-radius: 8px; }
@@ -263,7 +245,6 @@
             .logout-btn { padding: 6px 12px; font-size: 0.8rem; }
         }
 
-        /* ========== MODE PAYSAGE MOBILE ========== */
         @media (max-height: 500px) and (orientation: landscape) {
             body { align-items: flex-start; padding: 12px; }
             .container { padding: 18px; }
@@ -271,7 +252,6 @@
             .subtitle { margin-bottom: 12px; }
         }
 
-        /* ========== ACCESSIBILITÉ ========== */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 transition-duration: 0.01ms !important;
@@ -295,7 +275,6 @@
     <h2>🎵 AimpE3 Lyrics Studio</h2>
     <p class="subtitle">Publiez et gérez vos paroles synchronisées</p>
 
-    <!-- Formulaire d'authentification -->
     <div id="auth-section">
         <h3 id="form-title">Connexion</h3>
 
@@ -307,7 +286,6 @@
         <input type="password" id="password" placeholder="Mot de passe"
                autocomplete="current-password" required>
 
-        <!-- Indicateur de force (visible uniquement à l'inscription) -->
         <div id="strength-wrapper" class="hidden">
             <div class="password-strength">
                 <div id="strength-bar" class="password-strength-bar"></div>
@@ -331,7 +309,6 @@
         </button>
     </div>
 
-    <!-- Espace d'upload réservé aux membres connectés -->
     <div id="upload-section" class="hidden">
         <div class="user-info">
             <span id="user-email" title="">—</span>
@@ -352,16 +329,21 @@
     <div id="status" role="status" aria-live="polite"></div>
 </div>
 
-<!-- SDK Firebase -->
+<!-- ============================================================
+     SDK Firebase + App Check
+     ============================================================ -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+
+    // ✅ APP CHECK : import du module App Check
+    import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
+
     import {
         getAuth,
         signInWithEmailAndPassword,
         createUserWithEmailAndPassword,
         onAuthStateChanged,
-        signOut,
-        sendPasswordResetEmail
+        signOut
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -375,6 +357,23 @@
     };
 
     const app = initializeApp(firebaseConfig);
+
+    // ============================================================
+    // ✅ APP CHECK — INITIALISATION AVANT getAuth / getFirestore
+    // ============================================================
+    // ⚠️ REMPLACEZ 'VOTRE_CLE_DE_SITE_RECAPTCHA_V3' par votre clé publique
+    //    obtenue sur https://www.google.com/recaptcha/admin/create
+    //    (choisir reCAPTCHA v3, ajouter vos domaines + localhost)
+    //
+    //    La clé SECRÈTE correspondante doit être enregistrée dans
+    //    Firebase Console → Sécurité → App Check → Applications
+    // ============================================================
+    const appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider('VOTRE_CLE_DE_SITE_RECAPTCHA_V3'),
+        isTokenAutoRefreshEnabled: true
+    });
+
+    // ✅ APP CHECK actif — on peut maintenant initialiser les autres services
     const auth = getAuth(app);
     const db = getFirestore(app);
 
@@ -382,9 +381,9 @@
 
     // ========== CONSTANTES DE SÉCURITÉ ==========
     const PASSWORD_MIN_LENGTH = 12;
-    const MAX_FILE_SIZE = 500 * 1024; // 500 Ko
+    const MAX_FILE_SIZE = 500 * 1024;
     const MAX_LOGIN_ATTEMPTS = 5;
-    const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 min
+    const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
     const ATTEMPTS_KEY = 'aimpe3_login_attempts';
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -415,7 +414,7 @@
         return Object.values(getPasswordChecks(pwd)).every(Boolean);
     }
 
-    // ========== ANTI-BRUTEFORCE (côté client) ==========
+    // ========== ANTI-BRUTEFORCE ==========
     function getLoginAttempts() {
         try {
             const data = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) || '{}');
@@ -498,7 +497,6 @@
         const password = $('password').value;
         const btn = $('btn-auth');
 
-        // Validations
         if (!validateEmail(email)) {
             setStatus("Adresse email invalide.", "#e74c3c");
             $('email').classList.add('invalid');
@@ -544,7 +542,6 @@
             $('password').value = '';
             $('password-confirm').value = '';
         } catch (error) {
-            // Messages génériques pour ne pas révéler si l'email existe
             let msg = "Identifiants invalides ou problème de connexion.";
             if (error.code === 'auth/email-already-in-use') {
                 msg = "Un compte existe déjà avec cet email.";
@@ -554,6 +551,11 @@
                 msg = "Trop de tentatives. Réessayez plus tard.";
             } else if (error.code === 'auth/network-request-failed') {
                 msg = "Problème de connexion réseau.";
+            }
+
+            // ✅ APP CHECK : erreur possible si App Check est mal configuré ou si le token est rejeté
+            if (error.message && error.message.includes('app-check')) {
+                msg = "Vérification de sécurité échouée. Vérifiez la configuration App Check.";
             }
 
             if (!isSignUp) {
@@ -569,7 +571,6 @@
         }
     });
 
-    // Soumission au clavier (Entrée)
     ['email', 'password', 'password-confirm'].forEach(id => {
         $(id).addEventListener('keydown', (e) => {
             if (e.key === 'Enter') $('btn-auth').click();
@@ -591,7 +592,6 @@
 
         const file = fileInput.files[0];
 
-        // Validation type & taille
         if (!/\.lrc$/i.test(file.name)) {
             setStatus("Seuls les fichiers .lrc sont acceptés.", "#e74c3c");
             return;
@@ -644,6 +644,9 @@
                 .slice(0, 200);
 
             try {
+                // ✅ APP CHECK : cette écriture Firestore sera automatiquement
+                //    accompagnée du token App Check (car initializeAppCheck a été
+                //    appelé AVANT getFirestore).
                 await setDoc(doc(db, "lyrics", queryKey), {
                     artist: artist.toLowerCase(),
                     title: title.toLowerCase(),
@@ -657,7 +660,13 @@
                 setStatus("Paroles publiées avec succès !", "#1DB954");
                 fileInput.value = "";
             } catch (error) {
-                setStatus("Erreur lors de l'envoi : " + (error.code || 'inconnu'), "#e74c3c");
+                // ✅ APP CHECK : si l'enforcement est activé et le token invalide,
+                //    Firestore renvoie permission-denied
+                if (error.code === 'permission-denied') {
+                    setStatus("Accès refusé. Vérifiez votre connexion ou la configuration App Check.", "#e74c3c");
+                } else {
+                    setStatus("Erreur lors de l'envoi : " + (error.code || 'inconnu'), "#e74c3c");
+                }
             } finally {
                 btn.disabled = false;
             }
@@ -686,6 +695,23 @@
     });
 </script>
 
+<!-- ============================================================
+     ⚠️ DÉVELOPPEMENT LOCAL (localhost) — TOKEN DE DEBUG
+     ============================================================
+     Décommentez le bloc ci-dessous UNIQUEMENT pour le développement local.
+     Puis dans la console navigateur, récupérez le token affiché :
+       "AppCheck debug token: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+     Enregistrez-le dans Firebase Console → App Check → Applications
+       → menu ⋮ de votre app → Gérer les jetons de débogage.
+
+     ⚠️ NE JAMAIS laisser ce bloc en production !
+     ============================================================ -->
+<!--
+<script>
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+</script>
+-->
+
 <!--
 ==========================================================
 ⚠️ RÈGLES FIRESTORE À DÉPLOYER (recommandé)
@@ -694,9 +720,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /lyrics/{docId} {
-      // Lecture publique (les clients AimpE3 téléchargent les paroles)
       allow read: if true;
-      // Écriture réservée aux utilisateurs authentifiés
       allow write: if request.auth != null
                    && request.resource.data.size() < 500000
                    && request.resource.data.lyricsContent is string
@@ -704,13 +728,6 @@ service cloud.firestore {
     }
   }
 }
-
-⚠️ NOTE : la clé API Firebase côté client est normale (publique par design).
-   La sécurité réelle repose sur :
-   - les règles Firestore ci-dessus
-   - les règles d'authentification Firebase
-   - l'activation de "Email enumeration protection" dans la console Firebase
-   - le quota/débit Firestore
 ==========================================================
 -->
 </body>
