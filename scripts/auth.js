@@ -22,14 +22,13 @@ let lastResendTime = 0;
 
 const $ = (id) => document.getElementById(id);
 
-// ✅ Helper : attache un écouteur seulement si l'élément existe
 function on(id, event, handler) {
     const el = $(id);
     if (el) {
         el.addEventListener(event, handler);
         return true;
     }
-    console.warn(`[auth] Élément #${id} introuvable — écouteur non attaché`);
+    console.warn(`[auth] Élément #${id} introuvable`);
     return false;
 }
 
@@ -118,7 +117,6 @@ function updateStrength(pwd) {
 export function initAuth(auth) {
     console.log("[auth] Initialisation…");
 
-    // Basculement
     on('btn-switch', 'click', () => {
         isSignUp = !isSignUp;
         const formTitle = $('form-title');
