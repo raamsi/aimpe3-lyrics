@@ -120,6 +120,12 @@ export async function loadSong(artist, title) {
 
         if (lyricsPlayer) {
             lyricsPlayer.loadLyrics(data.lyricsContent);
+            // DEBUG temporaire
+            console.log("=== LRC brut ===");
+            console.log(data.lyricsContent);
+            console.log("=== Lignes parsées ===");
+            console.log(lyricsPlayer.lines);
+            console.log("Nombre de lignes avec timestamps:", lyricsPlayer.lines.length);
         }
 
         if (data.audioUrl && lyricsPlayer) {
