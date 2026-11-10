@@ -110,4 +110,132 @@ export async function loadSong(artist, title) {
         .slice(0, 200);
 
     try {
-        const docRef = doc(db, "lyrics",
+        const docRef = doc(db, "lyrics", queryKey);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+            throw new Error("Paroles introuvables");
+        }
+
+        const data = docSnap.data();
+
+        const titleEl = document.getElementById('track-title');
+        const artistEl = document.getElementById('track-artist');
+        if (titleEl) titleEl.textContent = data.titleOriginal || title;
+        if (artistEl) artistEl.textContent = data.artistOriginal || artist;
+
+        document.getElementById('player-section')?.classList.remove('hidden');
+        document.getElementById('upload-section')?.classList.add('hidden');
+
+        if (lyricsPlayer) {
+            lyricsPlayer.loadLyrics(data.lyricsContent);
+
+            if (lyricsPlayer.lines.length === 0) {
+                setStatus(
+                    "⚠️ Aucun timestamp trouvé dans ce fichier .lrc. " +
+                    "La synchronisation ne fonctionnera pas.",
+                    "#f39c12"
+                );
+            } else {
+                setStatus(
+                    `${lyricsPlayer.lines.length} lignes synchronisées. ` +
+                    "Chargez un fichier audio pour démarrer.",
+                    "#1DB954"
+                );
+            }
+        }
+
+        if (data.audioUrl && lyricsPlayer) {
+            lyricsPlayer.loadAudio(data.audioUrl);
+        }
+
+        return data;
+    } catch (error) {
+        console.error("Erreur chargement:", error);
+        setStatus("Erreur : " + error.message, "#e74c3c");
+        throw error;
+    }
+}
+
+function updateUI(user) {
+    const authSection = document.getElementById('auth-section');
+    const verifySection = document.getElementById('verify-section');
+    const uploadSection = document.getElementById('upload-section');
+    const playerSection = document.getElementById('player-section');
+
+    if (!user) {
+        authSection?.classList.remove('hidden');
+        verifySection?.classList.add('hidden');
+        uploadSection?.classList.add('hidden');
+        playerSection?.classList.add('hidden');
+        return;
+    }
+
+    if (!user.emailVerified) {
+        authSection?.classList.add('hidden');
+        verifySection?.classList.remove('hidden');
+        uploadSection?.classList.add('hidden');
+        playerSection?.classList.add('hidden');
+
+        const verifyEmail = document.getElementById('verify-user-email');
+        const verifyHighlight = document.getElementById('verify-email-highlight');
+        if (verifyEmail) verifyEmail.textContent = user.email;
+        if (verifyHighlight) verifyHighlight.textContent = user.email;
+        return;
+    }
+
+    authSection?.classList.add('hidden');
+    verifySection?.classList.add('hidden');
+    uploadSection?.classList.remove('hidden');
+    playerSection?.classList.remove('hidden');
+
+    const userEmailEl = document.getElementById('user-email');
+    if (userEmailEl) {
+        userEmailEl.textContent = user.email;
+        userEmailEl.title = user.email;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initPlayer();
+    initAuth(auth);
+    initUpload(auth, db);
+
+    onAuthStateChanged(auth, (user) => {
+        setStatus("");
+        updateUI(user);
+    });
+});
+
+window.addEventListener('user-updated', async () => {
+    const user = auth.currentUser;
+    if (user) {
+        try {
+            await reload(user);
+            updateUI(user);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+});
+
+window.addEventListener('lyrics-uploaded', (e) => {
+    const { artist, title, timestampCount } = e.detail;
+    loadSong(artist, title).catch(err => console.error(err));
+
+    if (timestampCount === 0) {
+        setTimeout(() => {
+            setStatus(
+                "⚠️ Fichier uploadé sans timestamps. Ajoutez [mm:ss.xx] pour la synchronisation.",
+                "#f39c12"
+            );
+        }, 500);
+    }
+});
+
+window.app = {
+    loadSong,
+    getPlayer: () => lyricsPlayer,
+    auth,
+    db
+};
