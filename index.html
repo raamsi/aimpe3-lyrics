@@ -75,6 +75,25 @@
 
         <button type="button" id="btn-upload" disabled>Publier</button>
     </div>
+    <!-- Répertoire des fichiers -->
+<div id="catalog-section" class="hidden">
+    <h3>📂 Répertoire de tous les fichiers .lrc</h3>
+    <button type="button" id="btn-load-catalog">Actualiser la liste</button>
+    <div id="catalog-table-container">
+        <table id="catalog-table">
+            <thead>
+                <tr>
+                    <th>Artiste</th>
+                    <th>Titre</th>
+                    <th>Timestamps</th>
+                    <th>Durée</th>
+                    <th>Uploadé par</th>
+                </tr>
+            </thead>
+            <tbody id="catalog-body"></tbody>
+        </table>
+    </div>
+</div>
 
     <div id="status" role="status" aria-live="polite"></div>
 </div>
