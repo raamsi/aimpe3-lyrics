@@ -1,8 +1,13 @@
 /**
- * upload.js — Upload .lrc avec validation des timestamps
+ * upload.js — Upload .lrc + validation des timestamps + répertoire
  */
 
-import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+    doc,
+    setDoc,
+    collection,
+    getDocs
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const MAX_FILE_SIZE = 500 * 1024;
 
@@ -41,10 +46,8 @@ function parseLrc(lrcText) {
         const trimmed = rawLine.trim();
         if (!trimmed) continue;
 
-        // Ignorer les métadonnées
         if (metaRegex.test(trimmed)) continue;
 
-        // Chercher les timestamps
         const timestamps = [];
         let match;
         timeRegex.lastIndex = 0;
@@ -77,7 +80,6 @@ function parseLrc(lrcText) {
 
     lines.sort((a, b) => a.time - b.time);
 
-    // Dédupliquer
     const deduped = [];
     for (const line of lines) {
         if (deduped.length === 0 || Math.abs(deduped[deduped.length - 1].time - line.time) > 0.01) {
@@ -89,17 +91,23 @@ function parseLrc(lrcText) {
 }
 
 function formatTime(seconds) {
+    if (!seconds || isNaN(seconds)) return '—';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     const ms = Math.round((seconds - Math.floor(seconds)) * 100);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
 }
 
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 export function initUpload(auth, db) {
     console.log("[upload] Initialisation…");
 
-    let validatedFile = null;      // { file, artist, title, lines, content }
-    let validateTimeout = null;
+    let validatedFile = null;
 
     // ---------- Validation à la sélection du fichier ----------
     on('fileInput', 'change', () => {
@@ -121,7 +129,6 @@ export function initUpload(auth, db) {
 
         const file = fileInput.files[0];
 
-        // Validations basiques
         if (!/\.lrc$/i.test(file.name)) {
             setStatus("Seuls les fichiers .lrc sont acceptés.", "#e74c3c");
             return;
@@ -135,7 +142,6 @@ export function initUpload(auth, db) {
             return;
         }
 
-        // Validation du nom : "Artiste - Titre.lrc"
         const fileName = file.name.replace(/\.[^/.]+$/, "");
         const parts = fileName.split('-');
 
@@ -165,7 +171,6 @@ export function initUpload(auth, db) {
                 return;
             }
 
-            // ✅ Parse et validation des timestamps
             const lines = parseLrc(content);
 
             if (!lines || lines.length === 0) {
@@ -178,7 +183,6 @@ export function initUpload(auth, db) {
                 return;
             }
 
-            // Afficher la prévisualisation
             validatedFile = { file, artist, title, lines, content };
 
             if (previewSection) previewSection.classList.remove('hidden');
@@ -188,7 +192,6 @@ export function initUpload(auth, db) {
                 previewStatus.className = "preview-status ok";
             }
 
-            // Afficher les 10 premières lignes
             if (previewList) {
                 previewList.innerHTML = '';
                 lines.slice(0, 10).forEach(line => {
@@ -241,7 +244,6 @@ export function initUpload(auth, db) {
                 artistOriginal: artist,
                 titleOriginal: title,
                 lyricsContent: content,
-                // ✅ On stocke les timestamps déjà parsés pour la lecture
                 timestamps: lines.map(l => ({ time: l.time, text: l.text })),
                 timestampCount: lines.length,
                 duration: lines[lines.length - 1].time,
@@ -253,7 +255,6 @@ export function initUpload(auth, db) {
 
             setStatus(`✅ Paroles publiées ! ${lines.length} lignes synchronisées.`, "#1DB954");
 
-            // Reset
             validatedFile = null;
             const fileInput = $('fileInput');
             if (fileInput) fileInput.value = '';
@@ -270,10 +271,88 @@ export function initUpload(auth, db) {
             if (btn) btn.disabled = false;
         }
     });
-}
 
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    // ---------- RÉPERTOIRE : chargement de tous les .lrc ----------
+    on('btn-load-catalog', 'click', async () => {
+        if (!auth.currentUser || !auth.currentUser.emailVerified) {
+            setStatus("Connectez-vous avec un email vérifié pour voir le répertoire.", "#e74c3c");
+            return;
+        }
+
+        const tbody = $('catalog-body');
+        const btnCatalog = $('btn-load-catalog');
+        if (!tbody) return;
+
+        tbody.innerHTML = '<tr><td colspan="5">Chargement…</td></tr>';
+        if (btnCatalog) btnCatalog.disabled = true;
+
+        try {
+            // ✅ Récupère TOUS les documents de la collection "lyrics"
+            const querySnapshot = await getDocs(collection(db, "lyrics"));
+
+            tbody.innerHTML = '';
+
+            if (querySnapshot.empty) {
+                tbody.innerHTML = '<tr><td colspan="5">Aucun fichier .lrc trouvé.</td></tr>';
+                setStatus("Aucun fichier .lrc trouvé.", "#f39c12");
+                return;
+            }
+
+            const docs = [];
+            querySnapshot.forEach(docSnap => {
+                docs.push({ id: docSnap.id, ...docSnap.data() });
+            });
+
+            // Trier : plus récent en premier
+            docs.sort((a, b) => {
+                const dateA = a.updatedAt?.toDate?.()?.getTime?.() || 0;
+                const dateB = b.updatedAt?.toDate?.()?.getTime?.() || 0;
+                return dateB - dateA;
+            });
+
+            docs.forEach(data => {
+                const tr = document.createElement('tr');
+
+                const tdArtist = document.createElement('td');
+                tdArtist.textContent = data.artistOriginal || data.artist || '—';
+                tdArtist.title = tdArtist.textContent;
+
+                const tdTitle = document.createElement('td');
+                tdTitle.textContent = data.titleOriginal || data.title || '—';
+                tdTitle.title = tdTitle.textContent;
+
+                const tdCount = document.createElement('td');
+                tdCount.textContent = data.timestampCount ?? (data.timestamps?.length || 0);
+
+                const tdDuration = document.createElement('td');
+                tdDuration.textContent = data.duration != null ? formatTime(data.duration) : '—';
+
+                const tdOwner = document.createElement('td');
+                tdOwner.textContent = data.ownerEmail || '—';
+                tdOwner.title = data.ownerEmail || '';
+                tdOwner.style.fontSize = '0.7rem';
+
+                tr.appendChild(tdArtist);
+                tr.appendChild(tdTitle);
+                tr.appendChild(tdCount);
+                tr.appendChild(tdDuration);
+                tr.appendChild(tdOwner);
+                tbody.appendChild(tr);
+            });
+
+            setStatus(`${docs.length} fichier(s) .lrc trouvé(s).`, "#1DB954");
+
+        } catch (error) {
+            console.error("[catalog] Erreur :", error);
+            if (error.code === 'permission-denied') {
+                tbody.innerHTML = '<tr><td colspan="5">Accès refusé.</td></tr>';
+                setStatus("Accès refusé. Vérifiez les règles Firestore.", "#e74c3c");
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5">Erreur lors du chargement.</td></tr>';
+                setStatus("Erreur : " + (error.code || error.message), "#e74c3c");
+            }
+        } finally {
+            if (btnCatalog) btnCatalog.disabled = false;
+        }
+    });
 }
