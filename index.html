@@ -14,7 +14,7 @@
     <h2>🎵 AimpE3 Lyrics Studio</h2>
     <p class="subtitle">Publiez et écoutez vos paroles synchronisées</p>
 
-    <!-- Section Auth (identique à la version précédente) -->
+    <!-- ========== AUTH ========== -->
     <div id="auth-section">
         <h3 id="form-title">Connexion</h3>
         <input type="email" id="email" placeholder="Adresse Email" autocomplete="email">
@@ -34,7 +34,7 @@
         <button class="switch-btn" id="btn-switch" type="button">Pas encore de compte ? S'inscrire</button>
     </div>
 
-    <!-- Section Vérification Email -->
+    <!-- ========== VÉRIFICATION EMAIL ========== -->
     <div id="verify-section" class="hidden">
         <div class="user-info">
             <span id="verify-user-email">—</span>
@@ -49,7 +49,7 @@
         <button class="secondary-btn" type="button" id="btn-check-verified" style="background:var(--primary);">J'ai vérifié</button>
     </div>
 
-    <!-- Section Upload -->
+    <!-- ========== UPLOAD ========== -->
     <div id="upload-section" class="hidden">
         <div class="user-info">
             <span id="user-email">—</span>
@@ -61,7 +61,7 @@
         <button type="button" id="btn-upload">Publier</button>
     </div>
 
-    <!-- ========== LECTEUR SYNCHRONISÉ (nouveau) ========== -->
+    <!-- ========== LECTEUR SYNCHRONISÉ ========== -->
     <div id="player-section" class="hidden">
         <div class="player-header">
             <div class="track-info">
@@ -71,17 +71,18 @@
             <button class="logout-btn" type="button" id="btn-logout-player">Déconnexion</button>
         </div>
 
-        <!-- Audio element natif (contrôles custom ci-dessous) -->
-        <audio id="audio-player" preload="metadata"></audio>
-
-        <!-- Zone d'affichage des paroles synchronisées -->
-        <div class="lyrics-viewport" id="lyrics-viewport">
-            <div class="lyrics-container" id="lyrics-container">
-                <!-- Les lignes seront injectées par JS -->
-            </div>
+        <!-- Chargement audio local -->
+        <div class="audio-loader">
+            <label for="audio-file" class="audio-label">🎵 Charger un fichier audio local</label>
+            <input type="file" id="audio-file" accept="audio/*">
         </div>
 
-        <!-- Contrôles de lecture -->
+        <audio id="audio-player" preload="metadata"></audio>
+
+        <div class="lyrics-viewport" id="lyrics-viewport">
+            <div class="lyrics-container" id="lyrics-container"></div>
+        </div>
+
         <div class="player-controls">
             <button id="btn-play-pause" class="play-btn" type="button" aria-label="Lecture">▶</button>
             <div class="progress-container">
@@ -91,7 +92,6 @@
             </div>
         </div>
 
-        <!-- Ajustement manuel de l'offset (décalage) -->
         <div class="offset-control">
             <label for="offset-input">Décalage (ms) :</label>
             <input type="number" id="offset-input" value="0" step="100" min="-5000" max="5000">
