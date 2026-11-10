@@ -12,10 +12,11 @@
         button { width: 100%; background-color: #1DB954; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
         button:hover { background-color: #1ed760; }
         .hidden { display: none; }
-        .switch-btn { background: none; color: #b3b3b3; border: none; text-decoration: underline; margin-top: 15px; font-size: 0.9em; }
+        .switch-btn { background: none; color: #b3b3b3; border: none; text-decoration: underline; margin-top: 15px; font-size: 0.9em; cursor: pointer; }
         #status { margin-top: 15px; text-align: center; font-weight: bold; }
         .user-info { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px; border-radius: 6px; margin-bottom: 15px; }
         .logout-btn { background: #e74c3c; width: auto; padding: 6px 12px; margin: 0; }
+        .hint { font-size: 0.85em; color: #a1a1aa; margin-bottom: 10px; text-align: center; }
     </style>
 </head>
 <body>
@@ -41,6 +42,7 @@
         </div>
 
         <h3>Uploader un fichier .lrc</h3>
+        <p class="hint">Nommez votre fichier : <strong>Artiste - Titre.lrc</strong></p>
         <input type="file" id="fileInput" accept=".lrc">
         <button onclick="uploadLrc()">Publier sur le serveur</button>
     </div>
@@ -52,8 +54,8 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // VOTRE CONFIGURATION FIREBASE À COLLER ICI :
     const firebaseConfig = {
         apiKey: "AIzaSyBRGa-C4CBQHOfoU_dVdbqf3HMGMmP7olQ",
         authDomain: "aimpe3-web.firebaseapp.com",
@@ -65,9 +67,10 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const db = getFirestore(app);
     let isSignUp = false;
 
-    // Gestion du basculement Connexion / Inscription
+    // Basculement Connexion / Inscription
     window.toggleAuthMode = function() {
         isSignUp = !isSignUp;
         document.getElementById('form-title').innerText = isSignUp ? "Créer un compte" : "Connexion";
@@ -75,7 +78,7 @@
         document.getElementById('btn-switch').innerText = isSignUp ? "Déjà un compte ? Se connecter" : "Pas encore de compte ? S'inscrire";
     };
 
-    // Authentification User
+    // Authentification
     window.handleAuth = async function() {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
@@ -101,7 +104,60 @@
         signOut(auth);
     };
 
-    // Observer l'état de connexion de l'utilisateur
+    // Upload du fichier .lrc vers Firestore
+    window.uploadLrc = async function() {
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+
+        if (fileInput.files.length === 0) {
+            status.innerText = "Veuillez sélectionner un fichier .lrc !";
+            status.style.color = "orange";
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const fileName = file.name.replace(/\.[^/.]+$/, ""); // Supprime l'extension
+        const parts = fileName.split('-');
+
+        if (parts.length < 2) {
+            status.innerText = "Format requis : Artiste - Titre.lrc";
+            status.style.color = "red";
+            return;
+        }
+
+        const artist = parts[0].trim();
+        const title = parts.slice(1).join('-').trim();
+
+        status.innerText = "Envoi vers Firestore en cours...";
+        status.style.color = "#ffffff";
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const lyricsContent = e.target.result;
+            const queryKey = (artist + "_" + title).toLowerCase().replace(/[^a-z0-9]/g, "_");
+
+            try {
+                await setDoc(doc(db, "lyrics", queryKey), {
+                    artist: artist.toLowerCase(),
+                    title: title.toLowerCase(),
+                    artistOriginal: artist,
+                    titleOriginal: title,
+                    lyricsContent: lyricsContent,
+                    updatedAt: new Date()
+                });
+
+                status.innerText = "Paroles publiées avec succès sur Firestore !";
+                status.style.color = "#1DB954";
+                fileInput.value = "";
+            } catch (error) {
+                status.innerText = "Erreur Firestore : " + error.message;
+                status.style.color = "red";
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Observer l'état de connexion
     onAuthStateChanged(auth, (user) => {
         const authSection = document.getElementById('auth-section');
         const uploadSection = document.getElementById('upload-section');
