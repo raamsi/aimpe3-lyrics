@@ -68,6 +68,14 @@ h3 {
     margin-bottom: 16px;
 }
 
+code {
+    background: var(--input-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    color: var(--primary);
+}
+
 input[type="email"],
 input[type="password"],
 input[type="file"] {
@@ -181,6 +189,67 @@ button:disabled {
     line-height: 1.5;
 }
 
+/* Prévisualisation des timestamps */
+#preview-section {
+    margin-top: 16px;
+    padding: 14px;
+    background: var(--input-bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.preview-status {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.preview-status.ok {
+    background: rgba(29, 185, 84, 0.2);
+    color: var(--primary);
+}
+
+.preview-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.preview-list li {
+    padding: 4px 0;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.preview-list li:last-child {
+    border-bottom: none;
+}
+
+.preview-list li.more {
+    color: var(--primary);
+    font-style: italic;
+}
+
+.preview-list .ts {
+    color: var(--primary);
+    font-family: monospace;
+    font-size: 0.8rem;
+    margin-right: 6px;
+}
+
 .verify-banner {
     background: rgba(243, 156, 18, 0.15);
     border: 1px solid var(--warning);
@@ -290,13 +359,4 @@ button:disabled {
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
     }
-}
-
-.sr-only {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    border: 0;
 }
