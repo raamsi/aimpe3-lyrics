@@ -1,45 +1,14 @@
 /**
  * main.js — Orchestrateur principal
- * Initialise Firebase, App Check, les modules auth/upload, et le lecteur synchronisé
  */
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-import {
-    getAuth,
-    onAuthStateChanged,
-    reload
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import {
-    getFirestore,
-    doc,
-    getDoc
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { auth, db } from './firebase-config.js';
+import { onAuthStateChanged, reload, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import { LyricsPlayer } from './player.js';
 import { initAuth } from './auth.js';
 import { initUpload } from './upload.js';
-
-// ========== CONFIG FIREBASE ==========
-const firebaseConfig = {
-    apiKey: "AIzaSyBRGa-C4CBQHOfoU_dVdbqf3HMGMmP7olQ",
-    authDomain: "aimpe3-web.firebaseapp.com",
-    projectId: "aimpe3-web",
-    storageBucket: "aimpe3-web.firebasestorage.app",
-    messagingSenderId: "141430245510",
-    appId: "1:141430245510:web:c26a4d06a89dd4ede46907"
-};
-
-const app = initializeApp(firebaseConfig);
-
-// ✅ App Check — AVANT getAuth / getFirestore
-initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider('VOTRE_CLE_DE_SITE_RECAPTCHA_V3'),
-    isTokenAutoRefreshEnabled: true
-});
-
-export const auth = getAuth(app);
-export const db = getFirestore(app);
 
 // ========== ÉTAT GLOBAL ==========
 let lyricsPlayer = null;
@@ -67,19 +36,17 @@ function initPlayer() {
     const container = document.getElementById('lyrics-container');
 
     if (!audio || !viewport || !container) {
-        console.warn("Éléments du lecteur introuvables dans le DOM");
+        console.warn("Éléments du lecteur introuvables");
         return null;
     }
 
     lyricsPlayer = new LyricsPlayer(audio, viewport, container);
 
-    // Bouton Play/Pause
     const btnPlay = document.getElementById('btn-play-pause');
     if (btnPlay) {
         btnPlay.addEventListener('click', () => lyricsPlayer.toggle());
     }
 
-    // Mise à jour de l'icône play/pause
     lyricsPlayer.onPlayStateChange = (isPlaying) => {
         if (btnPlay) {
             btnPlay.textContent = isPlaying ? '⏸' : '▶';
@@ -87,7 +54,6 @@ function initPlayer() {
         }
     };
 
-    // Barre de progression
     const progressBar = document.getElementById('progress-bar');
     const currentTimeEl = document.getElementById('current-time');
     const durationEl = document.getElementById('duration');
@@ -112,7 +78,6 @@ function initPlayer() {
         if (durationEl) durationEl.textContent = formatTime(audio.duration);
     });
 
-    // Offset manuel
     const offsetInput = document.getElementById('offset-input');
     if (offsetInput) {
         offsetInput.addEventListener('change', (e) => {
@@ -120,19 +85,15 @@ function initPlayer() {
         });
     }
 
-    // Déconnexion depuis le lecteur
     const btnLogoutPlayer = document.getElementById('btn-logout-player');
     if (btnLogoutPlayer) {
-        btnLogoutPlayer.addEventListener('click', () => {
-            import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
-                .then(({ signOut }) => signOut(auth));
-        });
+        btnLogoutPlayer.addEventListener('click', () => signOut(auth));
     }
 
     return lyricsPlayer;
 }
 
-// ========== CHARGEMENT D'UNE CHANSON DEPUIS FIRESTORE ==========
+// ========== CHARGEMENT D'UNE CHANSON ==========
 export async function loadSong(artist, title) {
     const queryKey = (artist + "_" + title)
         .toLowerCase()
@@ -149,22 +110,18 @@ export async function loadSong(artist, title) {
 
         const data = docSnap.data();
 
-        // Mettre à jour l'interface
         const titleEl = document.getElementById('track-title');
         const artistEl = document.getElementById('track-artist');
         if (titleEl) titleEl.textContent = data.titleOriginal || title;
         if (artistEl) artistEl.textContent = data.artistOriginal || artist;
 
-        // Afficher la section lecteur
         document.getElementById('player-section')?.classList.remove('hidden');
         document.getElementById('upload-section')?.classList.add('hidden');
 
-        // Charger les paroles dans le lecteur
         if (lyricsPlayer) {
             lyricsPlayer.loadLyrics(data.lyricsContent);
         }
 
-        // Charger l'audio si une URL existe
         if (data.audioUrl && lyricsPlayer) {
             lyricsPlayer.loadAudio(data.audioUrl);
         } else {
@@ -182,7 +139,7 @@ export async function loadSong(artist, title) {
     }
 }
 
-// ========== AFFICHAGE SELON L'ÉTAT UTILISATEUR ==========
+// ========== UI SELON ÉTAT UTILISATEUR ==========
 function updateUI(user) {
     const authSection = document.getElementById('auth-section');
     const verifySection = document.getElementById('verify-section');
@@ -210,7 +167,6 @@ function updateUI(user) {
         return;
     }
 
-    // Email vérifié → upload + lecteur visibles
     authSection?.classList.add('hidden');
     verifySection?.classList.add('hidden');
     uploadSection?.classList.remove('hidden');
@@ -223,16 +179,12 @@ function updateUI(user) {
     }
 }
 
-// ========== INITIALISATION ==========
+// ========== INIT ==========
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initialiser le lecteur (DOM prêt)
     initPlayer();
-
-    // 2. Initialiser les modules auth et upload
     initAuth(auth);
     initUpload(auth, db);
 
-    // 3. Écouter l'état de connexion
     onAuthStateChanged(auth, (user) => {
         setStatus("");
         updateUI(user);
@@ -240,8 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========== ÉVÉNEMENTS CUSTOM ==========
-
-// Après vérification d'email → rafraîchir l'UI
 window.addEventListener('user-updated', async () => {
     const user = auth.currentUser;
     if (user) {
@@ -254,13 +204,12 @@ window.addEventListener('user-updated', async () => {
     }
 });
 
-// Après upload réussi → charger automatiquement la chanson
 window.addEventListener('lyrics-uploaded', (e) => {
     const { artist, title } = e.detail;
     loadSong(artist, title).catch(err => console.error(err));
 });
 
-// ========== EXPOSITION GLOBALE (pour debug) ==========
+// ========== DEBUG ==========
 window.app = {
     loadSong,
     getPlayer: () => lyricsPlayer,
