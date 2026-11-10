@@ -150,8 +150,20 @@ export function initUpload(auth, db) {
             return;
         }
 
-        const artist = parts[0].trim().slice(0, 100);
-        const title = parts.slice(1).join('-').trim().slice(0, 150);
+        let rawArtist = parts[0].trim();
+        let rawTitle = parts.slice(1).join('-').trim();
+
+        // Nettoyage intelligent des termes parasites (official video, mp3, parenthèses...) pour standardiser la clé
+        const cleanText = (text) => {
+            return text
+                .replace(/\(.*?\)/g, '')
+                .replace(/\[.*?\]/g, '')
+                .replace(/official video|lyrics|audio|clip officiel|mp3|\b\d{2,3}kbps\b/gi, '')
+                .trim();
+        };
+
+        const artist = cleanText(rawArtist).slice(0, 100);
+        const title = cleanText(rawTitle).slice(0, 150);
 
         if (!artist || !title) {
             setStatus("Artiste et titre ne peuvent pas être vides.", "#e74c3c");
@@ -232,9 +244,11 @@ export function initUpload(auth, db) {
         if (btn) btn.disabled = true;
         setStatus("Publication en cours…", "#ffffff");
 
+        // Clé normalisée ultra-propre (ex: lion_hill_ano_tavela)
         const queryKey = (artist + "_" + title)
             .toLowerCase()
             .replace(/[^a-z0-9]/g, "_")
+            .replace(/_+/g, "_")
             .slice(0, 200);
 
         try {
@@ -253,7 +267,7 @@ export function initUpload(auth, db) {
                 updatedAt: new Date()
             });
 
-            setStatus(`✅ Paroles publiées ! ${lines.length} lignes synchronisées.`, "#1DB954");
+            setStatus(`✅ Paroles publiées sous la clé [${queryKey}] !`, "#1DB954");
 
             validatedFile = null;
             const fileInput = $('fileInput');
@@ -287,7 +301,6 @@ export function initUpload(auth, db) {
         if (btnCatalog) btnCatalog.disabled = true;
 
         try {
-            // ✅ Récupère TOUS les documents de la collection "lyrics"
             const querySnapshot = await getDocs(collection(db, "lyrics"));
 
             tbody.innerHTML = '';
@@ -303,7 +316,6 @@ export function initUpload(auth, db) {
                 docs.push({ id: docSnap.id, ...docSnap.data() });
             });
 
-            // Trier : plus récent en premier
             docs.sort((a, b) => {
                 const dateA = a.updatedAt?.toDate?.()?.getTime?.() || 0;
                 const dateB = b.updatedAt?.toDate?.()?.getTime?.() || 0;
