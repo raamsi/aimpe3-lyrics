@@ -91,7 +91,7 @@ function parseLrc(lrcText) {
 }
 
 function formatTime(seconds) {
-    if (!seconds || isNaN(seconds)) return '—';
+    if (seconds == null || isNaN(seconds)) return '—';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     const ms = Math.round((seconds - Math.floor(seconds)) * 100);
@@ -104,10 +104,117 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function safeFileName(value) {
+    return String(value || '')
+        .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+        .trim()
+        .replace(/[. ]+$/g, '')
+        .slice(0, 150) || 'lyrics';
+}
+
+function getLyricsContent(data) {
+    // Les nouveaux enregistrements conservent le texte LRC original.
+    if (typeof data.lyricsContent === 'string' && data.lyricsContent.length > 0) {
+        return data.lyricsContent;
+    }
+
+    // Compatibilité avec les anciens documents qui n'ont que les timestamps.
+    if (Array.isArray(data.timestamps) && data.timestamps.length > 0) {
+        return data.timestamps
+            .filter(line => Number.isFinite(Number(line.time)))
+            .map(line => `[${formatTime(Number(line.time))}]${line.text || ''}`)
+            .join('\n');
+    }
+
+    return '';
+}
+
+function downloadLyrics(data) {
+    const content = getLyricsContent(data);
+    if (!content) {
+        setStatus("Le contenu des paroles n'est pas disponible pour ce fichier.", "#e74c3c");
+        return;
+    }
+
+    const artist = data.artistOriginal || data.artist || 'Artiste';
+    const title = data.titleOriginal || data.title || 'Titre';
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeFileName(artist)} - ${safeFileName(title)}.lrc`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function initUpload(auth, db) {
     console.log("[upload] Initialisation…");
 
     let validatedFile = null;
+    let catalogDocs = [];
+
+    // Construit les lignes avec DOM API afin de traiter le contenu comme du texte.
+    const renderCatalog = (searchTerm = '') => {
+        const tbody = $('catalog-body');
+        if (!tbody) return;
+
+        const needle = searchTerm.trim().toLocaleLowerCase();
+        const filteredDocs = catalogDocs.filter(data => {
+            const searchable = [
+                data.artistOriginal, data.artist,
+                data.titleOriginal, data.title,
+                data.ownerEmail
+            ].filter(Boolean).join(' ').toLocaleLowerCase();
+            return searchable.includes(needle);
+        });
+
+        tbody.replaceChildren();
+        if (filteredDocs.length === 0) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 6;
+            td.textContent = catalogDocs.length
+                ? 'Aucun résultat pour cette recherche.'
+                : 'Aucun fichier .lrc trouvé.';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            return;
+        }
+
+        filteredDocs.forEach(data => {
+            const tr = document.createElement('tr');
+            const values = [
+                data.artistOriginal || data.artist || '—',
+                data.titleOriginal || data.title || '—',
+                data.timestampCount ?? (data.timestamps?.length || 0),
+                data.duration != null ? formatTime(Number(data.duration)) : '—',
+                data.ownerEmail || '—'
+            ];
+
+            values.forEach((value, index) => {
+                const td = document.createElement('td');
+                td.textContent = String(value);
+                if (index === 0 || index === 1 || index === 4) td.title = String(value);
+                if (index === 4) td.style.fontSize = '0.7rem';
+                tr.appendChild(td);
+            });
+
+            const downloadCell = document.createElement('td');
+            const downloadButton = document.createElement('button');
+            downloadButton.type = 'button';
+            downloadButton.className = 'download-btn';
+            downloadButton.textContent = 'Télécharger';
+            downloadButton.setAttribute('aria-label', `Télécharger ${values[0]} - ${values[1]} au format LRC`);
+            downloadButton.addEventListener('click', () => downloadLyrics(data));
+            downloadCell.appendChild(downloadButton);
+            tr.appendChild(downloadCell);
+            tbody.appendChild(tr);
+        });
+    };
+
+    on('catalog-search', 'input', (event) => renderCatalog(event.target.value));
 
     // ---------- Validation à la sélection du fichier ----------
     on('fileInput', 'change', () => {
@@ -153,7 +260,7 @@ export function initUpload(auth, db) {
         let rawArtist = parts[0].trim();
         let rawTitle = parts.slice(1).join('-').trim();
 
-        // Nettoyage intelligent des termes parasites (official video, mp3, parenthèses...) pour standardiser la clé
+        // Nettoyage intelligent des termes parasites pour standardiser la clé.
         const cleanText = (text) => {
             return text
                 .replace(/\(.*?\)/g, '')
@@ -205,10 +312,13 @@ export function initUpload(auth, db) {
             }
 
             if (previewList) {
-                previewList.innerHTML = '';
+                previewList.replaceChildren();
                 lines.slice(0, 10).forEach(line => {
                     const li = document.createElement('li');
-                    li.innerHTML = `<span class="ts">[${formatTime(line.time)}]</span> ${escapeHtml(line.text)}`;
+                    const timestamp = document.createElement('span');
+                    timestamp.className = 'ts';
+                    timestamp.textContent = `[${formatTime(line.time)}]`;
+                    li.append(timestamp, document.createTextNode(` ${line.text}`));
                     previewList.appendChild(li);
                 });
                 if (lines.length > 10) {
@@ -244,7 +354,7 @@ export function initUpload(auth, db) {
         if (btn) btn.disabled = true;
         setStatus("Publication en cours…", "#ffffff");
 
-        // Clé normalisée ultra-propre (ex: lion_hill_ano_tavela)
+        // Clé normalisée (ex: lion_hill_ano_tavela).
         const queryKey = (artist + "_" + title)
             .toLowerCase()
             .replace(/[^a-z0-9]/g, "_")
@@ -257,6 +367,7 @@ export function initUpload(auth, db) {
                 title: title.toLowerCase(),
                 artistOriginal: artist,
                 titleOriginal: title,
+                // On conserve le fichier .lrc brut pour permettre sa restitution exacte.
                 lyricsContent: content,
                 timestamps: lines.map(l => ({ time: l.time, text: l.text })),
                 timestampCount: lines.length,
@@ -286,7 +397,7 @@ export function initUpload(auth, db) {
         }
     });
 
-    // ---------- RÉPERTOIRE : chargement de tous les .lrc ----------
+    // ---------- RÉPERTOIRE : chargement et recherche ----------
     on('btn-load-catalog', 'click', async () => {
         if (!auth.currentUser || !auth.currentUser.emailVerified) {
             setStatus("Connectez-vous avec un email vérifié pour voir le répertoire.", "#e74c3c");
@@ -297,70 +408,45 @@ export function initUpload(auth, db) {
         const btnCatalog = $('btn-load-catalog');
         if (!tbody) return;
 
-        tbody.innerHTML = '<tr><td colspan="5">Chargement…</td></tr>';
+        tbody.replaceChildren();
+        const loadingRow = document.createElement('tr');
+        const loadingCell = document.createElement('td');
+        loadingCell.colSpan = 6;
+        loadingCell.textContent = 'Chargement…';
+        loadingRow.appendChild(loadingCell);
+        tbody.appendChild(loadingRow);
         if (btnCatalog) btnCatalog.disabled = true;
 
         try {
             const querySnapshot = await getDocs(collection(db, "lyrics"));
+            catalogDocs = [];
 
-            tbody.innerHTML = '';
-
-            if (querySnapshot.empty) {
-                tbody.innerHTML = '<tr><td colspan="5">Aucun fichier .lrc trouvé.</td></tr>';
-                setStatus("Aucun fichier .lrc trouvé.", "#f39c12");
-                return;
-            }
-
-            const docs = [];
             querySnapshot.forEach(docSnap => {
-                docs.push({ id: docSnap.id, ...docSnap.data() });
+                catalogDocs.push({ id: docSnap.id, ...docSnap.data() });
             });
 
-            docs.sort((a, b) => {
+            catalogDocs.sort((a, b) => {
                 const dateA = a.updatedAt?.toDate?.()?.getTime?.() || 0;
                 const dateB = b.updatedAt?.toDate?.()?.getTime?.() || 0;
                 return dateB - dateA;
             });
 
-            docs.forEach(data => {
-                const tr = document.createElement('tr');
-
-                const tdArtist = document.createElement('td');
-                tdArtist.textContent = data.artistOriginal || data.artist || '—';
-                tdArtist.title = tdArtist.textContent;
-
-                const tdTitle = document.createElement('td');
-                tdTitle.textContent = data.titleOriginal || data.title || '—';
-                tdTitle.title = tdTitle.textContent;
-
-                const tdCount = document.createElement('td');
-                tdCount.textContent = data.timestampCount ?? (data.timestamps?.length || 0);
-
-                const tdDuration = document.createElement('td');
-                tdDuration.textContent = data.duration != null ? formatTime(data.duration) : '—';
-
-                const tdOwner = document.createElement('td');
-                tdOwner.textContent = data.ownerEmail || '—';
-                tdOwner.title = data.ownerEmail || '';
-                tdOwner.style.fontSize = '0.7rem';
-
-                tr.appendChild(tdArtist);
-                tr.appendChild(tdTitle);
-                tr.appendChild(tdCount);
-                tr.appendChild(tdDuration);
-                tr.appendChild(tdOwner);
-                tbody.appendChild(tr);
-            });
-
-            setStatus(`${docs.length} fichier(s) .lrc trouvé(s).`, "#1DB954");
+            renderCatalog($('catalog-search')?.value || '');
+            setStatus(`${catalogDocs.length} fichier(s) .lrc trouvé(s).`, catalogDocs.length ? "#1DB954" : "#f39c12");
 
         } catch (error) {
             console.error("[catalog] Erreur :", error);
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 6;
+            cell.textContent = error.code === 'permission-denied'
+                ? 'Accès refusé.'
+                : 'Erreur lors du chargement.';
+            row.appendChild(cell);
+            tbody.replaceChildren(row);
             if (error.code === 'permission-denied') {
-                tbody.innerHTML = '<tr><td colspan="5">Accès refusé.</td></tr>';
                 setStatus("Accès refusé. Vérifiez les règles Firestore.", "#e74c3c");
             } else {
-                tbody.innerHTML = '<tr><td colspan="5">Erreur lors du chargement.</td></tr>';
                 setStatus("Erreur : " + (error.code || error.message), "#e74c3c");
             }
         } finally {

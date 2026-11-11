@@ -79,6 +79,8 @@
         <div id="catalog-section">
             <h3>📂 Répertoire de tous les fichiers .lrc</h3>
             <button type="button" id="btn-load-catalog">Actualiser la liste</button>
+            <label class="search-label" for="catalog-search">Rechercher par artiste, titre ou utilisateur</label>
+            <input type="search" id="catalog-search" placeholder="Ex. artiste ou titre…" autocomplete="off">
             <div id="catalog-table-container">
                 <table id="catalog-table">
                     <thead>
@@ -88,10 +90,11 @@
                             <th>Timestamps</th>
                             <th>Durée</th>
                             <th>Uploadé par</th>
+                            <th>Fichier</th>
                         </tr>
                     </thead>
                     <tbody id="catalog-body">
-                        <tr><td colspan="5">Cliquez sur « Actualiser la liste »</td></tr>
+                        <tr><td colspan="6">Cliquez sur « Actualiser la liste »</td></tr>
                     </tbody>
                 </table>
             </div>
