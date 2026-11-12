@@ -1,88 +1,113 @@
 /**
- * main.js — Orchestrateur
+ * main.js : orchestrateur (état de connexion, menu compte, raccourcis)
  */
 
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, reload } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { $, on } from './utils.js';
 import { initAuth } from './auth.js';
+import { initCatalog } from './catalog.js';
 import { initUpload } from './upload.js';
 
-function setStatus(msg, color = '#ffffff') {
-    const status = document.getElementById('status');
-    if (status) {
-        status.innerText = msg;
-        status.style.color = color;
-    }
-}
+let catalog;
+let upload;
+let lastKey = null;
 
+const authApi = initAuth(auth);
+
+catalog = initCatalog(auth, db, {
+    openAuth: (mode) => authApi.open(mode),
+    openUpload: () => upload.open()
+});
+
+upload = initUpload(auth, db, {
+    openAuth: (mode) => authApi.open(mode),
+    onPublished: () => catalog.load()
+});
+
+/* ---------- Interface selon l'utilisateur ---------- */
 function updateUI(user) {
-    const authSection = document.getElementById('auth-section');
-    const verifySection = document.getElementById('verify-section');
-    const uploadSection = document.getElementById('upload-section');
+    const loggedIn = Boolean(user);
 
-    if (!user) {
-        authSection?.classList.remove('hidden');
-        verifySection?.classList.add('hidden');
-        uploadSection?.classList.add('hidden');
-        return;
-    }
+    $('btn-open-login').classList.toggle('hidden', loggedIn);
+    $('account-menu').classList.toggle('hidden', !loggedIn);
+    $('verify-banner').classList.toggle('hidden', !(user && !user.emailVerified));
 
-    if (!user.emailVerified) {
-        authSection?.classList.add('hidden');
-        verifySection?.classList.remove('hidden');
-        uploadSection?.classList.add('hidden');
-
-        const verifyEmail = document.getElementById('verify-user-email');
-        const verifyHighlight = document.getElementById('verify-email-highlight');
-        if (verifyEmail) verifyEmail.textContent = user.email;
-        if (verifyHighlight) verifyHighlight.textContent = user.email;
-        return;
-    }
-
-    authSection?.classList.add('hidden');
-    verifySection?.classList.add('hidden');
-    uploadSection?.classList.remove('hidden');
-
-    const userEmailEl = document.getElementById('user-email');
-    if (userEmailEl) {
-        userEmailEl.textContent = user.email;
-        userEmailEl.title = user.email;
+    if (user) {
+        $('user-email').textContent = user.email || '';
+        $('btn-account').textContent = (user.email || '?').trim()[0] || '?';
+        $('verify-email-highlight').textContent = user.email || '';
+    } else {
+        closeMenu();
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("[main] DOM prêt");
-
-    try {
-        initAuth(auth);
-        console.log("[main] initAuth OK");
-    } catch (e) {
-        console.error("[main] initAuth a échoué :", e);
+/** Recharge le répertoire seulement si l'état de connexion a réellement changé. */
+function syncCatalog(user) {
+    const key = user ? `${user.uid}:${user.emailVerified}` : 'anon';
+    if (key !== lastKey) {
+        lastKey = key;
+        catalog.load();
     }
+}
 
-    try {
-        initUpload(auth, db);
-        console.log("[main] initUpload OK");
-    } catch (e) {
-        console.error("[main] initUpload a échoué :", e);
-    }
-
-    onAuthStateChanged(auth, (user) => {
-        setStatus("");
-        updateUI(user);
-    });
+onAuthStateChanged(auth, (user) => {
+    updateUI(user);
+    authApi.watchVerification(user);
+    syncCatalog(user);
 });
 
 window.addEventListener('user-updated', async () => {
     const user = auth.currentUser;
-    if (user) {
-        try {
-            await reload(user);
-            updateUI(user);
-        } catch (e) {
-            console.error(e);
-        }
+    if (!user) return;
+    try {
+        await reload(user);
+    } catch (e) {
+        console.error(e);
+    }
+    updateUI(user);
+    authApi.watchVerification(user);
+    syncCatalog(user);
+});
+
+/* ---------- Menu du compte ---------- */
+const popover = $('account-popover');
+const accountBtn = $('btn-account');
+
+function closeMenu() {
+    popover.classList.add('hidden');
+    accountBtn.setAttribute('aria-expanded', 'false');
+}
+
+on('btn-account', 'click', (event) => {
+    event.stopPropagation();
+    const willOpen = popover.classList.contains('hidden');
+    popover.classList.toggle('hidden', !willOpen);
+    accountBtn.setAttribute('aria-expanded', String(willOpen));
+});
+
+document.addEventListener('click', (event) => {
+    if (!popover.classList.contains('hidden') && !$('account-menu').contains(event.target)) closeMenu();
+});
+
+/* ---------- Divers ---------- */
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+
+    // « / » place le curseur dans la recherche
+    const tag = (event.target.tagName || '').toLowerCase();
+    if (event.key === '/' && !['input', 'textarea', 'select'].includes(tag)
+        && !document.querySelector('dialog[open]')) {
+        event.preventDefault();
+        $('catalog-search').focus();
     }
 });
+
+const topbar = $('topbar');
+window.addEventListener('scroll', () => {
+    topbar.classList.toggle('scrolled', window.scrollY > 8);
+}, { passive: true });
+
+$('year').textContent = String(new Date().getFullYear());
 
 window.app = { auth, db };
